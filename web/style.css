@@ -1,0 +1,19 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* HERE Map chiếm phần bên phải, chừa panel Flutter bên trái 360px */
+#here-map-container {
+  position: fixed;
+  top: 0;
+  left: 360px;   /* nếu panel của bạn rộng khác thì chỉnh số này */
+  right: 0;
+  bottom: 0;
+  z-index: 10;   /* cao hơn Flutter map placeholder */
+  overflow: hidden;
+}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>here_map</title>
+
+  <style>
+    html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; }
+  </style>
+
+  <!-- HERE JS -->
+  <link rel="stylesheet" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
+
+  <!-- ✅ DÁN KEY Ở ĐÂY -->
+  <script>
+    window.HERE_API_KEY = "N8-oXeUzAsSNYiIslD8HVoqFc3wmxL4PlDlWLUQXRCg";
+  </script>
+
+  <script src="here_map.js"></script>
+  <script src="flutter.js" defer></script>
+</head>
+
+<body>
+<script>
+  window.addEventListener('load', function () {
+    if (window._flutter && window._flutter.loader) {
+      window._flutter.loader.loadEntrypoint({
+        serviceWorker: { serviceWorkerVersion: null }
+      }).then(function (engineInitializer) {
+        return engineInitializer.initializeEngine();
+      }).then(function (appRunner) {
+        return appRunner.runApp();
+      });
+    }
+  });
+</script>
+</body>
+</html>

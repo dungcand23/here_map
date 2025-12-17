@@ -1,0 +1,32 @@
+name: here_map
+description: HERE Map App Flutter (Web / Windows / Android)
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  webview_flutter: ^4.4.2
+  webview_flutter_wkwebview: ^3.12.0
+  webview_flutter_android: ^3.12.0
+  provider: ^6.0.5
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
+
+  # dùng html cho web
+  flutter_web_plugins:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/map_here.html

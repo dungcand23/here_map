@@ -1,0 +1,58 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android
+android/.gradle/
+android/local.properties
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+
+# =========================
+# HERE SDK binaries (KHÔNG COMMIT)
+# =========================
+plugins/heresdk-explore-flutter-4.24.4.0.240388/
+plugins/**/android/libs/*.aar
+plugins/**/ios/Frameworks/**/*.xcframework
+plugins/**/ios/Frameworks/**/*.framework
+plugins/**/*.tar.gz
+plugins/**/*.zip
+plugins/**/*.dSYM/
