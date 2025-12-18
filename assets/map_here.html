@@ -46,46 +46,98 @@
     let behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
     let ui = H.ui.UI.createDefault(map, layers);
 
-    // Flutter → updateMap(payloadJson)
-    window.updateMap = function(payloadJson) {
-      if (!payloadJson) return;
-      let data = {};
-      try {
-        data = JSON.parse(payloadJson);
-      } catch (e) {
-        return;
+    // ✅ Group tách riêng marker / polyline (tránh clear nhầm & tránh "dữ liệu ma")
+    const markersGroup = new H.map.Group();
+    const polylinesGroup = new H.map.Group();
+    map.addObject(markersGroup);
+    map.addObject(polylinesGroup);
+
+    function clearMarkers() { markersGroup.removeAll(); }
+    function clearPolylines() { polylinesGroup.removeAll(); }
+
+    function markerSvgNumber(label, color) {
+      const fill = color || '#1A73E8';
+      const text = String(label || '');
+      return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34">
+        <circle cx="17" cy="17" r="14" fill="${fill}" />
+        <circle cx="17" cy="17" r="14" fill="none" stroke="white" stroke-width="3"/>
+        <text x="17" y="22" text-anchor="middle" font-family="Arial"
+              font-size="14" font-weight="700" fill="white">${text}</text>
+      </svg>`;
+    }
+
+    function drawPolyline(polylinePayload) {
+      if (!polylinePayload) return;
+
+      // Flexible polyline string
+      if (typeof polylinePayload === 'string') {
+        try {
+          const ls = H.geo.LineString.fromFlexiblePolyline(polylinePayload);
+          const pl = new H.map.Polyline(ls, { style: { lineWidth: 6, strokeColor: '#1A73E8' } });
+          polylinesGroup.addObject(pl);
+          map.getViewModel().setLookAtData({ bounds: pl.getBoundingBox() }, true);
+          return;
+        } catch (e) {
+          console.error('[HERE][mobile] flexible polyline decode failed', e);
+        }
       }
 
-      if (data.clearPolylines) {
-        map.removeObjects(map.getObjects());
+      // Points array [{lat,lng},...]
+      if (Array.isArray(polylinePayload)) {
+        try {
+          const ls = new H.geo.LineString();
+          polylinePayload.forEach(p => {
+            const lat = Number(p.lat);
+            const lng = Number(p.lng);
+            if (isFinite(lat) && isFinite(lng)) ls.pushPoint({ lat, lng });
+          });
+          if (ls.getPointCount() < 2) return;
+          const pl = new H.map.Polyline(ls, { style: { lineWidth: 6, strokeColor: '#1A73E8' } });
+          polylinesGroup.addObject(pl);
+          map.getViewModel().setLookAtData({ bounds: pl.getBoundingBox() }, true);
+          return;
+        } catch (e) {
+          console.error('[HERE][mobile] points polyline draw failed', e);
+        }
       }
+
+      console.warn('[HERE][mobile] Unsupported polyline format:', polylinePayload);
+    }
+
+    // Flutter → updateMap(payloadJsonString)
+    window.updateMap = function(payloadStr) {
+      if (!payloadStr) return;
+      let data = {};
+      try { data = JSON.parse(payloadStr); } catch (e) { return; }
+
+      if (data.clearMarkers) clearMarkers();
+      if (data.clearPolylines) clearPolylines();
 
       // Markers
-      if (data.markers && Array.isArray(data.markers)) {
+      if (Array.isArray(data.markers)) {
         data.markers.forEach(m => {
-          const marker = new H.map.Marker({ lat: m.lat, lng: m.lng });
-          map.addObject(marker);
+          const lat = Number(m.lat);
+          const lng = Number(m.lng);
+          if (!isFinite(lat) || !isFinite(lng)) return;
+          const icon = new H.map.Icon(markerSvgNumber(m.label, m.color || '#1A73E8'));
+          const marker = new H.map.Marker({ lat, lng }, { icon });
+          markersGroup.addObject(marker);
         });
       }
 
       // Polyline
-      if (data.polyline && Array.isArray(data.polyline) && data.polyline.length > 0) {
-        const lineString = new H.geo.LineString();
-        data.polyline.forEach(p => lineString.pushPoint({ lat: p.lat, lng: p.lng }));
-        const poly = new H.map.Polyline(lineString, {
-          style: { strokeColor: "blue", lineWidth: 4 }
-        });
-        map.addObject(poly);
-      }
+      if (data.polyline) drawPolyline(data.polyline);
 
-      // Center
-      if (data.center) {
-        map.setCenter({ lat: data.center.lat, lng: data.center.lng });
+      // Center/Zoom
+      if (data.center && data.center.lat != null && data.center.lng != null) {
+        map.setCenter({ lat: Number(data.center.lat), lng: Number(data.center.lng) }, true);
       }
-      if (data.zoom) {
-        map.setZoom(data.zoom);
-      }
+      if (data.zoom != null) map.setZoom(Number(data.zoom), true);
     };
+
+    // Resize
+    window.addEventListener('resize', () => map.getViewPort().resize());
 </script>
 </body>
 </html>

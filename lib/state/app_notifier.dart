@@ -1,12 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-import '../models/stop_model.dart';
-import '../models/vehicle_model.dart';
-import '../models/truck_option_model.dart';
-import '../models/fuel_model.dart';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/saved_route_model.dart';
+import '../models/stop_model.dart';
+import '../models/truck_option_model.dart';
+import '../models/vehicle_model.dart';
 import 'app_state.dart';
 
 class AppNotifier extends ChangeNotifier {
@@ -19,7 +19,8 @@ class AppNotifier extends ChangeNotifier {
 
   StopModel _emptyStop() => const StopModel(lat: 0, lng: 0, name: '');
 
-  bool _isFilled(StopModel s) => s.name.trim().isNotEmpty && (s.lat != 0 || s.lng != 0);
+  bool _isFilled(StopModel s) =>
+      s.name.trim().isNotEmpty && (s.lat != 0 || s.lng != 0);
 
   /// ✅ Quy tắc giống Google/WeGo:
   /// - Ban đầu: chỉ A
@@ -69,14 +70,18 @@ class AppNotifier extends ChangeNotifier {
     final truckJson = prefs.getString('truck') ?? '';
     final savedRoutesJson = prefs.getStringList('savedRoutes') ?? [];
 
-    final stops = stopsJson.map((e) => StopModel.fromJson(jsonDecode(e))).toList();
-    final vehicles = vehiclesJson.map((e) => VehicleModel.fromJson(jsonDecode(e))).toList();
+    final stops =
+    stopsJson.map((e) => StopModel.fromJson(jsonDecode(e))).toList();
+    final vehicles =
+    vehiclesJson.map((e) => VehicleModel.fromJson(jsonDecode(e))).toList();
 
     final truckOption = truckJson.isNotEmpty
         ? TruckOptionModel.fromJson(jsonDecode(truckJson))
         : TruckOptionModel.empty();
 
-    final savedRoutes = savedRoutesJson.map((e) => SavedRouteModel.fromJson(jsonDecode(e))).toList();
+    final savedRoutes = savedRoutesJson
+        .map((e) => SavedRouteModel.fromJson(jsonDecode(e)))
+        .toList();
 
     _state = _state.copyWith(
       stops: stops.isNotEmpty ? stops : _state.stops,
@@ -102,12 +107,18 @@ class AppNotifier extends ChangeNotifier {
 
   Future<void> _saveStops() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('stops', _state.stops.map((e) => jsonEncode(e.toJson())).toList());
+    await prefs.setStringList(
+      'stops',
+      _state.stops.map((e) => jsonEncode(e.toJson())).toList(),
+    );
   }
 
   Future<void> _saveVehicles() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('vehicles', _state.vehicles.map((e) => jsonEncode(e.toJson())).toList());
+    await prefs.setStringList(
+      'vehicles',
+      _state.vehicles.map((e) => jsonEncode(e.toJson())).toList(),
+    );
   }
 
   Future<void> _saveTruck() async {
@@ -206,6 +217,50 @@ class AppNotifier extends ChangeNotifier {
 
   void setMapMode(String mode) {
     _state = _state.copyWith(mapMode: mode);
+    notifyListeners();
+  }
+
+  // ============================================================
+  // ✅ 3 METHODS BẠN ĐANG THIẾU (gây 4 errors trong hình)
+  // ============================================================
+
+  /// ✅ Reset current plan (stops) về trạng thái ban đầu.
+  /// Lưu ý: KHÔNG xóa savedRoutes.
+  void resetPlan() {
+    _state = _state.copyWith(stops: [_emptyStop()]);
+    _normalizeStops();
+    _saveStops();
+    notifyListeners();
+  }
+
+  /// ✅ Load một tuyến đã lưu vào current plan.
+  /// (copy dữ liệu sang stops/truck/mapMode/traffic, không sửa danh sách savedRoutes)
+  void loadSavedRoute(SavedRouteModel route) {
+    final copiedStops = route.stops
+        .map((e) => StopModel(lat: e.lat, lng: e.lng, name: e.name))
+        .toList();
+
+    _state = _state.copyWith(
+      stops: copiedStops.isNotEmpty ? copiedStops : [_emptyStop()],
+      currentVehicle: route.vehicle ?? _state.currentVehicle,
+      truckOption: route.truckOption ?? _state.truckOption,
+      mapMode: route.mapMode ?? _state.mapMode,
+      trafficEnabled: route.trafficEnabled ?? _state.trafficEnabled,
+    );
+
+    _normalizeStops();
+    _saveStops();
+    _saveTruck();
+    notifyListeners();
+  }
+
+  /// ✅ Xóa 1 tuyến khỏi lịch sử đã lưu
+  void deleteSavedRoute(String id) {
+    final list = List<SavedRouteModel>.from(_state.savedRoutes)
+      ..removeWhere((e) => e.id == id);
+
+    _state = _state.copyWith(savedRoutes: list);
+    _saveSavedRoutes();
     notifyListeners();
   }
 }

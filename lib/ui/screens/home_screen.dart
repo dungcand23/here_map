@@ -75,6 +75,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (sig == _lastSig) return;
     _lastSig = sig;
 
+    // ✅ Khi danh sách điểm thay đổi: route cũ không còn hợp lệ.
+    // Clear polyline + reset thống kê để tránh "dữ liệu ma".
+    _isRouting = false;
+    _distanceKm = 0;
+    _durationMin = 0;
+
     final markers = <Map<String, dynamic>>[];
     for (int i = 0; i < filled.length; i++) {
       final st = filled[i];
@@ -92,14 +98,37 @@ class _HomeScreenState extends State<HomeScreen> {
       _mapPayload = {
         'clearMarkers': true,
         'markers': markers,
-        // chỉ clear polyline khi bạn muốn
-        'clearPolylines': false,
+        // ✅ luôn clear polyline khi stop thay đổi (để UI/map đồng bộ)
+        'clearPolylines': true,
         if (filled.isNotEmpty) ...{
           'center': {'lat': filled.last.lat, 'lng': filled.last.lng},
           'zoom': 13.0,
+        } else ...{
+          // default center nếu chưa có điểm nào
+          'center': {'lat': 10.776, 'lng': 106.700},
+          'zoom': 12.0,
         }
       };
     });
+  }
+
+  void _clearRouteOnly() {
+    if (!mounted) return;
+    setState(() {
+      _isRouting = false;
+      _distanceKm = 0;
+      _durationMin = 0;
+      _mapPayload = {
+        ...?_mapPayload,
+        'clearPolylines': true,
+      };
+    });
+  }
+
+  void _resetPlan(AppNotifier app) {
+    // Reset current plan (stops) nhưng không xóa lịch sử tuyến đã lưu
+    app.resetPlan();
+    _clearRouteOnly();
   }
 
   Future<void> _buildRoute(AppNotifier app) async {
@@ -196,6 +225,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           distanceKm: _distanceKm,
                           durationMin: _durationMin,
                           onRequestRoute: () => _buildRoute(app),
+                          onClearRoute: _clearRouteOnly,
+                          onResetPlan: () => _resetPlan(app),
+                          onLoadSavedRoute: (r) => app.loadSavedRoute(r),
                           // ✅ thêm 3 tham số mới
                           onOpenSettings: _openSettings,
                           onGoogleLogin: _googleLogin,
@@ -237,6 +269,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 distanceKm: _distanceKm,
                 durationMin: _durationMin,
                 onRequestRoute: () => _buildRoute(app),
+                onClearRoute: _clearRouteOnly,
+                onResetPlan: () => _resetPlan(app),
+                onLoadSavedRoute: (r) => app.loadSavedRoute(r),
                 // ✅ thêm 3 tham số mới
                 onOpenSettings: _openSettings,
                 onGoogleLogin: _googleLogin,

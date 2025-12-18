@@ -29,6 +29,7 @@ class StopListWidget extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: stops.length,
+      buildDefaultDragHandles: false, // ✅ tránh bị hiện 2 dấu “≡”
       onReorder: (oldIndex, newIndex) {
         if (newIndex > oldIndex) newIndex -= 1;
         onReorder(oldIndex, newIndex);
@@ -41,13 +42,23 @@ class StopListWidget extends StatelessWidget {
         return Container(
           key: ValueKey('stop_${i}_${s.name}_${s.lat}_${s.lng}'),
           margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [BoxShadow(blurRadius: 10, color: Color(0x12000000))],
+          ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 28,
                 height: 28,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Text(_badge(i), style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
               const SizedBox(width: 10),
@@ -77,7 +88,16 @@ class StopListWidget extends StatelessWidget {
               else
                 const SizedBox(width: 40),
 
-              if (canDrag) const Icon(Icons.drag_handle) else const SizedBox(width: 24),
+              if (canDrag)
+                ReorderableDragStartListener(
+                  index: i,
+                  child: const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Icon(Icons.drag_handle),
+                  ),
+                )
+              else
+                const SizedBox(width: 24),
             ],
           ),
         );

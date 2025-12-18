@@ -14,6 +14,9 @@ class BottomSheetPanel extends StatelessWidget {
     required this.distanceKm,
     required this.durationMin,
     required this.onRequestRoute,
+    required this.onClearRoute,
+    required this.onResetPlan,
+    required this.onLoadSavedRoute,
     required this.onOpenSettings,
     required this.onGoogleLogin,
     required this.authLabel,
@@ -25,6 +28,9 @@ class BottomSheetPanel extends StatelessWidget {
   final double distanceKm;
   final double durationMin;
   final VoidCallback onRequestRoute;
+  final VoidCallback onClearRoute;
+  final VoidCallback onResetPlan;
+  final void Function(SavedRouteModel) onLoadSavedRoute;
 
   // ✅ footer actions
   final VoidCallback onOpenSettings;
@@ -101,6 +107,16 @@ class BottomSheetPanel extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(child: Text('Tuyến đường', style: theme.textTheme.titleMedium)),
+                        IconButton(
+                          tooltip: 'Tuyến mới (clear map)',
+                          onPressed: onResetPlan,
+                          icon: const Icon(Icons.restart_alt),
+                        ),
+                        IconButton(
+                          tooltip: 'Clear tuyến (xóa polyline)',
+                          onPressed: onClearRoute,
+                          icon: const Icon(Icons.layers_clear),
+                        ),
                         FilledButton(
                           onPressed: isRouting ? null : onRequestRoute,
                           child: isRouting
@@ -147,12 +163,29 @@ class BottomSheetPanel extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tuyến đã lưu', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    if (s.savedRoutes.isEmpty)
-                      const Text('Chưa có tuyến nào.')
-                    else
-                      SavedRoutesWidget(routes: s.savedRoutes, onTapRoute: (_) {}),
+                    ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: EdgeInsets.zero,
+                      initiallyExpanded: false,
+                      title: Text(
+                        'Tuyến đã lưu (${s.savedRoutes.length})',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      children: [
+                        if (s.savedRoutes.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text('Chưa có tuyến nào.'),
+                          )
+                        else
+                          SavedRoutesWidget(
+                            routes: s.savedRoutes,
+                            onTapRoute: onLoadSavedRoute,
+                            onDeleteRoute: (r) => app.deleteSavedRoute(r.id),
+                            showHeader: false,
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),

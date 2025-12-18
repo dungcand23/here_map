@@ -41,8 +41,10 @@ class _MapViewNativeState extends State<MapViewNative> {
     if (!_pageLoaded) return;
     if (widget.payload == null) return;
 
-    final jsonStr = jsonEncode(widget.payload);
-    _controller.runJavaScript('window.updateMap($jsonStr);');
+    // ✅ window.updateMap(payloadJsonString)
+    // JS trong assets/map_here.html đang JSON.parse(...) nên ta phải truyền *string*.
+    final payloadStr = jsonEncode(widget.payload);
+    _controller.runJavaScript('window.updateMap(${jsonEncode(payloadStr)});');
   }
 
   @override
