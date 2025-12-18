@@ -9,6 +9,11 @@ let ro = null;
 let markersGroup = null;
 let polylinesGroup = null;
 
+function _hereLog(...args) {
+  if (window.HERE_DEBUG === false) return;
+  console.log(...args);
+}
+
 function findInRoot(root, id) {
   if (!root) return null;
   try { return root.getElementById ? root.getElementById(id) : null; } catch (_) {}
@@ -16,12 +21,10 @@ function findInRoot(root, id) {
 }
 
 function findDeep(id) {
-  // normal DOM
   let el = null;
   try { el = document.getElementById(id); } catch (_) {}
   if (el) return el;
 
-  // search shadow roots (Flutter web)
   const all = document.querySelectorAll('*');
   const max = Math.min(all.length, 3500);
   for (let i = 0; i < max; i++) {
@@ -41,14 +44,12 @@ function getApiKey() {
     window.API_KEY ||
     (document.querySelector('meta[name="here-api-key"]')?.content) ||
     '';
-
   return (typeof v === 'string') ? v.trim() : '';
 }
 
 function disposeMap() {
   try { ro?.disconnect(); } catch (_) {}
   try { map?.dispose(); } catch (_) {}
-
   platform = null;
   map = null;
   ui = null;
@@ -62,24 +63,20 @@ function ensureMap(containerId) {
   containerId = containerId || 'here_map_container';
 
   if (!window.H || !H.service || !H.Map) {
-    console.error('[HERE] HERE JS not loaded. Check web/index.html includes mapsjs-core/service/ui/mapevents.');
+    console.error('[HERE] HERE JS not loaded.');
     return false;
   }
 
   const key = getApiKey();
   if (!key || key.length < 10) {
-    console.error('[HERE] API KEY missing. Set window.HERE_API_KEY = "xxxx" in web/index.html (before here_map.js).');
+    console.error('[HERE] API KEY missing.');
     return false;
   }
 
   const el = findDeep(containerId);
   if (!el) return false;
 
-  // Flutter rebuild -> element đổi -> re-init
-  if (map && currentEl && el !== currentEl) {
-    disposeMap();
-  }
-
+  if (map && currentEl && el !== currentEl) disposeMap();
   if (map) return true;
 
   platform = new H.service.Platform({ apikey: key });
@@ -90,11 +87,7 @@ function ensureMap(containerId) {
     (layers.vector && layers.vector.normal && layers.vector.normal.map)
       ? layers.vector.normal.map
       : layers.normal.map,
-    {
-      center: { lat: 10.776, lng: 106.700 },
-      zoom: 12,
-      pixelRatio: window.devicePixelRatio || 1,
-    }
+    { center: { lat: 10.776, lng: 106.700 }, zoom: 12, pixelRatio: window.devicePixelRatio || 1 }
   );
 
   behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
@@ -105,20 +98,14 @@ function ensureMap(containerId) {
   map.addObject(markersGroup);
   map.addObject(polylinesGroup);
 
-  window.addEventListener('resize', () => {
-    try { map.getViewPort().resize(); } catch (_) {}
-  });
-
   if (window.ResizeObserver) {
-    ro = new ResizeObserver(() => {
-      try { map.getViewPort().resize(); } catch (_) {}
-    });
+    ro = new ResizeObserver(() => { try { map.getViewPort().resize(); } catch (_) {} });
     ro.observe(el);
   }
-
   currentEl = el;
-  try { map.getViewPort().resize(); } catch (_) {}
 
+  try { map.getViewPort().resize(); } catch (_) {}
+  _hereLog('[HERE] Map initialized');
   return true;
 }
 
@@ -130,96 +117,141 @@ function clearPolylines() {
   try { polylinesGroup?.removeAll(); } catch (_) {}
 }
 
-function markerSvg(label, color) {
-  const t = (label ?? '').toString();
-  const c = (color ?? '#1A73E8').toString();
-  return `
-<svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">
-  <path d="M17 1C9.3 1 3 7.3 3 15c0 10.6 14 28 14 28s14-17.4 14-28C31 7.3 24.7 1 17 1z"
-        fill="${c}" stroke="#0B3D91" stroke-width="1"/>
-  <circle cx="17" cy="15" r="10" fill="white" opacity="0.95"/>
-  <text x="17" y="19" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#1A73E8">${t}</text>
-</svg>`;
-}
+// ✅ DOM marker (đánh số) — ổn định hơn SVG
+function createNumberedDomMarker(lat, lng, label, color) {
+  const c = (color || '#1A73E8').toString();
+  const text = (label ?? '').toString();
 
-// ✅ Convert payload.stops -> markers (để tương thích code Flutter hiện tại của bạn)
-function stopsToMarkers(stops) {
-  if (!Array.isArray(stops)) return [];
+  const el = document.createElement('div');
+  el.style.width = '28px';
+  el.style.height = '28px';
+  el.style.borderRadius = '999px';
+  el.style.background = c;
+  el.style.boxShadow = '0 6px 14px rgba(0,0,0,0.25)';
+  el.style.display = 'flex';
+  el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.style.transform = 'translate(-50%, -50%)';
+  el.style.border = '2px solid white';
 
-  const markers = [];
-  for (let i = 0; i < stops.length; i++) {
-    const s = stops[i] || {};
-    const name = (s.name ?? s.title ?? s.label ?? '').toString().trim();
+  const span = document.createElement('span');
+  span.textContent = text;
+  span.style.color = '#fff';
+  span.style.fontWeight = '800';
+  span.style.fontFamily = 'Arial, sans-serif';
+  span.style.fontSize = '12px';
+  span.style.lineHeight = '1';
+  el.appendChild(span);
 
-    const lat = Number(
-      s.lat ?? s.latitude ?? (s.position ? s.position.lat : undefined)
-    );
-    const lng = Number(
-      s.lng ?? s.lon ?? s.longitude ?? (s.position ? s.position.lng : undefined)
-    );
-
-    // bỏ stop rỗng / chưa có tọa độ
-    if (!name) continue;
-    if (!isFinite(lat) || !isFinite(lng)) continue;
-    if (lat === 0 && lng === 0) continue;
-
-    markers.push({
-      lat,
-      lng,
-      label: String(i + 1),
-      title: name,
-      color: '#1A73E8',
-    });
+  // Nếu DomMarker có sẵn -> dùng
+  if (H.map.DomMarker) {
+    const icon = new H.map.DomIcon(el);
+    const m = new H.map.DomMarker({ lat, lng }, { icon });
+    m.setZIndex(9999);
+    return m;
   }
-  return markers;
+
+  // Fallback: marker thường (không số) nếu browser thiếu DomMarker
+  const m = new H.map.Marker({ lat, lng });
+  m.setZIndex(9999);
+  return m;
 }
 
 window.updateMap = function (payloadStr, containerId) {
+  containerId = containerId || 'here_map_container';
   if (!ensureMap(containerId)) return;
 
   let payload = null;
-  try { payload = JSON.parse(payloadStr); }
+  try { payload = (typeof payloadStr === 'string') ? JSON.parse(payloadStr) : payloadStr; }
   catch (e) { console.error('[HERE] invalid payload', e); return; }
 
-  // clear layers (đúng với phase bạn đang muốn: không để "ma")
-  if (payload.clearMarkers || payload.stops || payload.markers) clearMarkers();
-  if (payload.clearPolylines) clearPolylines();
+  const hasStops = Array.isArray(payload.stops) && payload.stops.length > 0;
+  const hasMarkers = Array.isArray(payload.markers) && payload.markers.length > 0;
+  const hasPolyline = Array.isArray(payload.polyline) && payload.polyline.length > 1;
 
-  // ưu tiên markers nếu có, không thì lấy stops
+  _hereLog('[HERE] Nhận payload', {
+    clearMarkers: payload.clearMarkers === true,
+    clearPolylines: payload.clearPolylines === true,
+    markersLen: Array.isArray(payload.markers) ? payload.markers.length : 0,
+    stopsLen: Array.isArray(payload.stops) ? payload.stops.length : 0,
+    polylineLen: Array.isArray(payload.polyline) ? payload.polyline.length : 0,
+  });
+
+  // ✅ KHÔNG clear chỉ vì markers=[]
+  if (payload.clearMarkers === true || hasStops || hasMarkers) clearMarkers();
+  if (payload.clearPolylines === true || hasPolyline) clearPolylines();
+
   let markers = [];
-  if (Array.isArray(payload.markers)) {
-    markers = payload.markers;
-  } else if (Array.isArray(payload.stops)) {
-    markers = stopsToMarkers(payload.stops);
-  }
+  if (Array.isArray(payload.markers)) markers = payload.markers;
 
-  // draw markers
-  if (Array.isArray(markers)) {
-    markers.forEach((m, idx) => {
+  let lastLat = null, lastLng = null;
+
+  // ✅ draw numbered markers
+  if (markers.length > 0) {
+    for (let i = 0; i < markers.length; i++) {
+      const m = markers[i] || {};
       const lat = Number(m.lat);
       const lng = Number(m.lng);
-      if (!isFinite(lat) || !isFinite(lng)) return;
+      if (!isFinite(lat) || !isFinite(lng)) continue;
 
-      const icon = new H.map.Icon(markerSvg(m.label ?? String(idx + 1), m.color || '#1A73E8'));
-      const marker = new H.map.Marker({ lat, lng }, { icon });
-      markersGroup.addObject(marker);
-    });
+      const label = (m.label != null) ? String(m.label) : String(i + 1);
+      const color = m.color || '#1A73E8';
+
+      const markerObj = createNumberedDomMarker(lat, lng, label, color);
+      markersGroup.addObject(markerObj);
+
+      lastLat = lat;
+      lastLng = lng;
+    }
+    _hereLog(`[HERE] Đã vẽ ${markers.length} marker(s)`);
   }
 
-  // center map
-  if (payload.center?.lat != null && payload.center?.lng != null) {
-    map.setCenter({ lat: Number(payload.center.lat), lng: Number(payload.center.lng) }, true);
-  } else if (markers.length > 0) {
-    const last = markers[markers.length - 1];
-    map.setCenter({ lat: Number(last.lat), lng: Number(last.lng) }, true);
+  // ----- POLYLINE -----
+  let routeFitted = false;
+  if (hasPolyline) {
+    try {
+      const ls = new H.geo.LineString();
+      for (let i = 0; i < payload.polyline.length; i++) {
+        const pt = payload.polyline[i] || {};
+        const lat = Number(pt.lat);
+        const lng = Number(pt.lng);
+        if (!isFinite(lat) || !isFinite(lng)) continue;
+        ls.pushPoint({ lat, lng });
+      }
+
+      if (ls.getPointCount() > 1) {
+        const pl = new H.map.Polyline(ls, { style: { lineWidth: 5, strokeColor: '#1A73E8' } });
+        polylinesGroup.addObject(pl);
+
+        const bbox = pl.getBoundingBox();
+        if (bbox) {
+          map.getViewModel().setLookAtData({ bounds: bbox }, true);
+          routeFitted = true;
+        }
+        _hereLog(`[HERE] Đã vẽ polyline (${ls.getPointCount()} points)`);
+      }
+    } catch (e) {
+      console.warn('[HERE] draw polyline failed', e);
+    }
   }
 
-  if (payload.zoom != null) map.setZoom(Number(payload.zoom), true);
+  // center/zoom về marker
+  if (!routeFitted && lastLat != null && lastLng != null) {
+    map.setCenter({ lat: lastLat, lng: lastLng }, true);
+    const z = (payload.zoom != null) ? Number(payload.zoom) : 15;
+    map.setZoom(z, true);
+  } else if (!routeFitted) {
+    if (payload.center?.lat != null && payload.center?.lng != null) {
+      map.setCenter({ lat: Number(payload.center.lat), lng: Number(payload.center.lng) }, true);
+      if (payload.zoom != null) map.setZoom(Number(payload.zoom), true);
+    }
+  }
 
   try { map.getViewPort().resize(); } catch (_) {}
 };
 
 window.resizeHereMap = function (containerId) {
+  containerId = containerId || 'here_map_container';
   if (!ensureMap(containerId)) return;
   try { map.getViewPort().resize(); } catch (_) {}
 };

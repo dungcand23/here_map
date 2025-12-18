@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _durationMin = 0;
 
   AppNotifier? _app;
-  String _lastSig = '';
+  String? _lastSig;
 
   bool get _isDesktopLike =>
       kIsWeb || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -41,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _googleLogin() {
     // TODO: triển khai Google login theo option C
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Đăng nhập Google (placeholder)')),
+      const SnackBar(content: Text('Google Login (placeholder)')),
     );
   }
 
@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _app?.removeListener(_onAppChanged);
       _app = app;
       _app!.addListener(_onAppChanged);
-      _onAppChanged();
+      _onAppChanged(); // ✅ lần đầu cũng set payload để map init
     }
   }
 
@@ -98,7 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _mapPayload = {
         'clearMarkers': true,
         'markers': markers,
-        // ✅ luôn clear polyline khi stop thay đổi (để UI/map đồng bộ)
         'clearPolylines': true,
         if (filled.isNotEmpty) ...{
           'center': {'lat': filled.last.lat, 'lng': filled.last.lng},
@@ -126,14 +125,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _resetPlan(AppNotifier app) {
-    // Reset current plan (stops) nhưng không xóa lịch sử tuyến đã lưu
     app.resetPlan();
     _clearRouteOnly();
   }
 
   Future<void> _buildRoute(AppNotifier app) async {
     final s = app.state;
-    final stops = s.stops.where((e) => e.name.trim().isNotEmpty).toList();
+    final stops = s.stops
+        .where((e) => e.name.trim().isNotEmpty && (e.lat != 0 || e.lng != 0))
+        .toList();
     final vehicle =
         s.currentVehicle ?? (s.vehicles.isNotEmpty ? s.vehicles.first : null);
 
@@ -154,7 +154,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _isRouting = false;
         _distanceKm = 0;
         _durationMin = 0;
-        // ✅ clear polyline khi route fail
         _mapPayload = {
           ...?_mapPayload,
           'clearPolylines': true,
@@ -165,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final distanceKm = result.distanceKm;
     final durationMin = result.durationMin;
-    final polyline = result.polyline; // string flexible polyline OR list points
+    final polyline = result.polyline; // list {lat,lng}
 
     final filled = stops
         .where((e) => e.name.trim().isNotEmpty && (e.lat != 0 || e.lng != 0))
@@ -192,7 +191,8 @@ class _HomeScreenState extends State<HomeScreen> {
         'markers': markers,
         'clearPolylines': true,
         'polyline': polyline,
-        if (filled.isNotEmpty) 'center': {'lat': filled.first.lat, 'lng': filled.first.lng},
+        if (filled.isNotEmpty)
+          'center': {'lat': filled.first.lat, 'lng': filled.first.lng},
         if (filled.isNotEmpty) 'zoom': 12.0,
       };
     });
@@ -228,7 +228,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           onClearRoute: _clearRouteOnly,
                           onResetPlan: () => _resetPlan(app),
                           onLoadSavedRoute: (r) => app.loadSavedRoute(r),
-                          // ✅ thêm 3 tham số mới
                           onOpenSettings: _openSettings,
                           onGoogleLogin: _googleLogin,
                           authLabel: _authLabel,
@@ -272,7 +271,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 onClearRoute: _clearRouteOnly,
                 onResetPlan: () => _resetPlan(app),
                 onLoadSavedRoute: (r) => app.loadSavedRoute(r),
-                // ✅ thêm 3 tham số mới
                 onOpenSettings: _openSettings,
                 onGoogleLogin: _googleLogin,
                 authLabel: _authLabel,

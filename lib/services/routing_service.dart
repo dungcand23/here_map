@@ -69,18 +69,28 @@ class RoutingService {
     final sections = firstRoute['sections'] as List<dynamic>? ?? [];
     if (sections.isEmpty) return null;
 
-    final sec = sections.first;
-    final summary = sec['summary'] ?? {};
-    final double distanceMeters =
-        (summary['length'] as num?)?.toDouble() ?? 0.0;
-    final double durationSeconds =
-        (summary['duration'] as num?)?.toDouble() ?? 0.0;
+    double distanceMeters = 0.0;
+    double durationSeconds = 0.0;
 
-    final polylineEncoded = sec['polyline'] as String?;
-    List<Map<String, double>> polyPoints = [];
+    final List<Map<String, double>> polyPoints = [];
 
-    if (polylineEncoded != null && polylineEncoded.isNotEmpty) {
-      polyPoints = PolylineUtils.decodeFlexiblePolyline(polylineEncoded);
+    for (int i = 0; i < sections.length; i++) {
+      final sec = sections[i];
+      final summary = sec['summary'] ?? {};
+      distanceMeters += (summary['length'] as num?)?.toDouble() ?? 0.0;
+      durationSeconds += (summary['duration'] as num?)?.toDouble() ?? 0.0;
+
+      final polylineEncoded = sec['polyline'] as String?;
+      if (polylineEncoded != null && polylineEncoded.isNotEmpty) {
+        final pts = PolylineUtils.decodeFlexiblePolyline(polylineEncoded);
+        if (pts.isNotEmpty) {
+          // tránh trùng điểm nối giữa các section
+          if (polyPoints.isNotEmpty) {
+            pts.removeAt(0);
+          }
+          polyPoints.addAll(pts);
+        }
+      }
     }
 
     return RoutingResult(

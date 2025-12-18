@@ -30,6 +30,7 @@ class _MapViewWebState extends State<MapViewWeb> {
   static bool _registered = false;
 
   Timer? _pump;
+  String? _lastSentPayload; // ✅ tránh gửi lặp gây clear/nhấp nháy + spam log
 
   @override
   void initState() {
@@ -38,7 +39,6 @@ class _MapViewWebState extends State<MapViewWeb> {
     if (kIsWeb && !_registered) {
       _registered = true;
 
-      // ✅ Register platform view for Flutter Web (works on recent Flutter)
       ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
         final div = html.DivElement()
           ..id = _containerId
@@ -51,7 +51,11 @@ class _MapViewWebState extends State<MapViewWeb> {
       });
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startPump());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startPump();
+      _resize();      // ✅ init map sớm
+      _sendPayload(); // ✅ apply payload ngay nếu có
+    });
   }
 
   @override
@@ -74,11 +78,12 @@ class _MapViewWebState extends State<MapViewWeb> {
   void _startPump() {
     _pump?.cancel();
     int count = 0;
+
+    // ✅ pump ngắn để cover mount/shadowRoot chậm
     _pump = Timer.periodic(const Duration(milliseconds: 120), (t) {
       count++;
-      _pingInit();
-      _sendPayload();
       _resize();
+      _sendPayload();
 
       if (count >= 25) {
         t.cancel();
@@ -87,24 +92,31 @@ class _MapViewWebState extends State<MapViewWeb> {
     });
   }
 
-  void _pingInit() {
-    try {
-      js.context.callMethod('updateMap', [
-        jsonEncode({
-          'markers': const [],
-          'clearMarkers': false,
-          'clearPolylines': false,
-        }),
-        _containerId,
-      ]);
-    } catch (_) {}
-  }
-
   void _sendPayload() {
-    if (widget.payload == null) return;
+    final payload = widget.payload;
+    if (payload == null) return;
+
+    final payloadStr = jsonEncode(payload);
+    if (payloadStr == _lastSentPayload) return;
+    _lastSentPayload = payloadStr;
+
+    // ✅ LOG từng bước
+    final markers = payload['markers'];
+    final polyline = payload['polyline'];
+    final mLen = markers is List ? markers.length : 0;
+    final pLen = polyline is List ? polyline.length : 0;
+
+    if (kDebugMode) {
+      if (mLen > 0) debugPrint('[Flutter] Gửi marker: $mLen marker(s)');
+      if (pLen > 1) debugPrint('[Flutter] Gửi polyline: $pLen point(s)');
+      if (mLen == 0 && pLen <= 1) debugPrint('[Flutter] Gửi payload (no markers/polyline)');
+    }
+
     try {
-      js.context.callMethod('updateMap', [jsonEncode(widget.payload), _containerId]);
-    } catch (_) {}
+      js.context.callMethod('updateMap', [payloadStr, _containerId]);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Flutter] updateMap error: $e');
+    }
   }
 
   void _resize() {

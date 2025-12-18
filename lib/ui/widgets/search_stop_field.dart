@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/stop_model.dart';
@@ -31,13 +32,26 @@ class _SearchStopFieldState extends State<SearchStopField> {
   bool _locating = false;
   bool _committing = false;
 
+  StopModel? _lastPicked;
+
   double _toDouble(dynamic v) => v is num ? v.toDouble() : 0.0;
 
   @override
   void initState() {
     super.initState();
     _c = TextEditingController(text: widget.initialText);
-    _focus = FocusNode()..addListener(() => setState(() {}));
+    _focus = FocusNode()..addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    // ✅ Mất focus mà chưa pick -> commit để ra tọa độ (giúp ghim marker)
+    if (!_focus.hasFocus) {
+      final text = _c.text.trim();
+      if (text.isNotEmpty && _lastPicked == null) {
+        Future.microtask(_commit);
+      }
+    }
+    if (mounted) setState(() {});
   }
 
   @override
@@ -89,11 +103,11 @@ class _SearchStopFieldState extends State<SearchStopField> {
   }
 
   void _onChanged(String v) {
+    _lastPicked = null;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () => _query(v));
   }
 
-  /// ✅ Gõ xong nhấn Enter/Done => tự pick kết quả đầu tiên (đảm bảo có lat/lng để ghim marker)
   Future<void> _commit() async {
     if (_committing) return;
     _committing = true;
@@ -101,7 +115,6 @@ class _SearchStopFieldState extends State<SearchStopField> {
       final query = _c.text.trim();
       if (query.isEmpty) return;
 
-      // Nếu list gợi ý đang có sẵn => pick luôn item đầu
       if (_items.isNotEmpty) {
         _pick(_items.first);
         return;
@@ -127,7 +140,13 @@ class _SearchStopFieldState extends State<SearchStopField> {
   }
 
   void _pick(StopModel s) {
+    _lastPicked = s;
     _c.text = s.name;
+
+    if (kDebugMode) {
+      debugPrint('[Flutter] Pick stop: "${s.name}" (${s.lat}, ${s.lng})');
+    }
+
     setState(() => _items = []);
     widget.onSelected(s);
     FocusScope.of(context).unfocus();
@@ -160,6 +179,7 @@ class _SearchStopFieldState extends State<SearchStopField> {
     final showMyLocationButton = _focus.hasFocus;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
           controller: _c,
@@ -195,8 +215,8 @@ class _SearchStopFieldState extends State<SearchStopField> {
                 : IconButton(
               icon: const Icon(Icons.close),
               onPressed: () {
-                // ✅ clear text + clear luôn Stop trong state (để map/marker sync đúng)
                 _c.clear();
+                _lastPicked = null;
                 setState(() => _items = []);
                 widget.onSelected(const StopModel(lat: 0, lng: 0, name: ''));
               },
@@ -224,11 +244,7 @@ class _SearchStopFieldState extends State<SearchStopField> {
                 final it = _items[i];
                 return ListTile(
                   dense: true,
-                  title: Text(
-                    it.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  title: Text(it.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                   onTap: () => _pick(it),
                 );
               },
