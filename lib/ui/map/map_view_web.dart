@@ -1,20 +1,19 @@
 // lib/ui/map/map_view_web.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html' as html;
-import 'dart:js' as js;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
 
-// Flutter web registry lives in different places depending on Flutter version.
-// - Newer: dart:ui_web has platformViewRegistry
-// - Older: dart:ui has platformViewRegistry (but not always)
-// We import ui_web first. If your Flutter doesn't have ui_web, comment that line
-// and use the ui fallback below.
 import 'dart:ui_web' as ui_web;
-// ignore: unused_import
-import 'dart:ui' as ui;
+
+@JS('updateMap')
+external void _updateMap(JSString payload, JSString containerId);
+
+@JS('resizeHereMap')
+external void _resizeHereMap(JSString containerId);
 
 class MapViewWeb extends StatefulWidget {
   final Map<String, dynamic>? payload;
@@ -30,22 +29,19 @@ class _MapViewWebState extends State<MapViewWeb> {
   static bool _registered = false;
 
   Timer? _pump;
-  String? _lastSentPayload; // ✅ tránh gửi lặp gây clear/nhấp nháy + spam log
+  String? _lastSent;
 
   @override
   void initState() {
     super.initState();
 
-    if (kIsWeb && !_registered) {
+    if (!_registered) {
       _registered = true;
-
       ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
-        final div = html.DivElement()
+        final div = web.HTMLDivElement()
           ..id = _containerId
           ..style.width = '100%'
           ..style.height = '100%'
-          ..style.position = 'relative'
-          ..style.overflow = 'hidden'
           ..style.backgroundColor = '#ffffff';
         return div;
       });
@@ -53,8 +49,7 @@ class _MapViewWebState extends State<MapViewWeb> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startPump();
-      _resize();      // ✅ init map sớm
-      _sendPayload(); // ✅ apply payload ngay nếu có
+      _sendPayload();
     });
   }
 
@@ -68,61 +63,33 @@ class _MapViewWebState extends State<MapViewWeb> {
   void didUpdateWidget(covariant MapViewWeb oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.payload != oldWidget.payload) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _sendPayload();
-        _resize();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _sendPayload());
     }
   }
 
   void _startPump() {
-    _pump?.cancel();
-    int count = 0;
-
-    // ✅ pump ngắn để cover mount/shadowRoot chậm
+    int tick = 0;
     _pump = Timer.periodic(const Duration(milliseconds: 120), (t) {
-      count++;
-      _resize();
+      tick++;
+      _resizeHereMap(_containerId.toJS);
       _sendPayload();
-
-      if (count >= 25) {
-        t.cancel();
-        _pump = null;
-      }
+      if (tick > 20) t.cancel();
     });
   }
 
   void _sendPayload() {
-    final payload = widget.payload;
-    if (payload == null) return;
+    if (widget.payload == null) return;
 
-    final payloadStr = jsonEncode(payload);
-    if (payloadStr == _lastSentPayload) return;
-    _lastSentPayload = payloadStr;
-
-    // ✅ LOG từng bước
-    final markers = payload['markers'];
-    final polyline = payload['polyline'];
-    final mLen = markers is List ? markers.length : 0;
-    final pLen = polyline is List ? polyline.length : 0;
+    final json = jsonEncode(widget.payload);
+    if (json == _lastSent) return;
+    _lastSent = json;
 
     if (kDebugMode) {
-      if (mLen > 0) debugPrint('[Flutter] Gửi marker: $mLen marker(s)');
-      if (pLen > 1) debugPrint('[Flutter] Gửi polyline: $pLen point(s)');
-      if (mLen == 0 && pLen <= 1) debugPrint('[Flutter] Gửi payload (no markers/polyline)');
+      final m = widget.payload?['markers'];
+      debugPrint('[Flutter] Gửi marker: ${m is List ? m.length : 0}');
     }
 
-    try {
-      js.context.callMethod('updateMap', [payloadStr, _containerId]);
-    } catch (e) {
-      if (kDebugMode) debugPrint('[Flutter] updateMap error: $e');
-    }
-  }
-
-  void _resize() {
-    try {
-      js.context.callMethod('resizeHereMap', [_containerId]);
-    } catch (_) {}
+    _updateMap(json.toJS, _containerId.toJS);
   }
 
   @override
