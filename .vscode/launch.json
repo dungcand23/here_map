@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "here_map (dev)",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": ["--dart-define-from-file=env.dev.json"]
+    },
+    {
+      "name": "here_map (web dev)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "deviceId": "chrome",
+      "toolArgs": ["--dart-define-from-file=env.dev.json"]
+    }
+  ]
+}
