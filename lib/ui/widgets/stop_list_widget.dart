@@ -19,9 +19,11 @@ class StopListWidget extends StatelessWidget {
   });
 
   String _badge(int i) => i == 0 ? 'A' : (i == 1 ? 'B' : '+');
-  String _hint(int i) => i == 0 ? 'Nhập địa điểm...' : (i == 1 ? 'Nhập địa điểm...' : 'Thêm điểm dừng');
+  String _hint(int i) =>
+      i == 0 ? 'Nhập địa điểm...' : (i == 1 ? 'Nhập địa điểm...' : 'Thêm điểm dừng');
 
-  bool _isEmpty(StopModel s) => s.name.trim().isEmpty || (s.lat == 0 && s.lng == 0);
+  bool _isEmpty(StopModel s) =>
+      s.name.trim().isEmpty || (s.lat == 0 && s.lng == 0);
 
   @override
   Widget build(BuildContext context) {
@@ -29,20 +31,23 @@ class StopListWidget extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: stops.length,
-      buildDefaultDragHandles: false, // ✅ tránh bị hiện 2 dấu “≡”
+      buildDefaultDragHandles: false,
       onReorder: (oldIndex, newIndex) {
         if (newIndex > oldIndex) newIndex -= 1;
         onReorder(oldIndex, newIndex);
       },
       itemBuilder: (context, i) {
         final s = stops[i];
-        final canRemove = i >= 2;
-        final canDrag = i >= 2; // A/B không kéo
+        final isIntermediate = i >= 2;
+        final empty = _isEmpty(s);
+
+        // Drag chỉ có ý nghĩa khi stop trung gian đã có data
+        final canDrag = isIntermediate && !empty;
 
         return Container(
           key: ValueKey('stop_${i}_${s.name}_${s.lat}_${s.lng}'),
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(10),
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -59,7 +64,10 @@ class StopListWidget extends StatelessWidget {
                   color: Colors.black12,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(_badge(i), style: const TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  _badge(i),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -70,20 +78,19 @@ class StopListWidget extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (!_isEmpty(s))
-                IconButton(
-                  tooltip: 'Xoá nội dung',
-                  icon: const Icon(Icons.close),
-                  onPressed: () => onClearStop(i),
-                )
-              else
-                const SizedBox(width: 40),
 
-              if (canRemove)
+              // ✅ Chỉ hiện X khi stop có dữ liệu
+              if (!empty)
                 IconButton(
-                  tooltip: 'Bỏ điểm dừng',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => onRemove(i),
+                  tooltip: isIntermediate ? 'Bỏ điểm dừng' : 'Xoá nội dung',
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    if (isIntermediate) {
+                      onRemove(i); // remove hẳn stop trung gian
+                    } else {
+                      onClearStop(i); // clear A/B
+                    }
+                  },
                 )
               else
                 const SizedBox(width: 40),

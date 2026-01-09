@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 
 import '../app_config.dart';
 import '../models/stop_model.dart';
+import 'analytics_service.dart';
+import 'api_exceptions.dart';
 
 class NearbyService {
   /// type: atm | gas | food
@@ -11,6 +13,9 @@ class NearbyService {
     required double lng,
     required String type,
   }) async {
+    if (!AppConfig.hasHereApiKey) {
+      throw const MissingApiKeyException();
+    }
     String? categories;
     switch (type) {
       case 'atm':
@@ -40,16 +45,36 @@ class NearbyService {
       '/v1/browse',
       params,
     );
+    final requestId = DateTime.now().microsecondsSinceEpoch.toString();
+    final t0 = DateTime.now();
+
+    await AnalyticsService.track('nearby_requested', {
+      'request_id': requestId,
+      'type': type,
+    });
 
     final res = await http.get(uri);
+    final latencyMs = DateTime.now().difference(t0).inMilliseconds;
+
+    await AnalyticsService.track('nearby_received', {
+      'request_id': requestId,
+      'type': type,
+      'status': res.statusCode,
+      'latency_ms': latencyMs,
+    });
+
     if (res.statusCode != 200) {
-      return [];
+      throw ApiException(
+        'Nearby search failed',
+        statusCode: res.statusCode,
+        endpoint: uri.toString(),
+      );
     }
 
     final data = jsonDecode(res.body);
     final items = data['items'] as List<dynamic>? ?? [];
 
-    return items
+    final results = items
         .where((e) => e['position'] != null)
         .map((e) {
       final pos = e['position'];
@@ -60,5 +85,7 @@ class NearbyService {
       );
     })
         .toList();
+
+    return results;
   }
 }

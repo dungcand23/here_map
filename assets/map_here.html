@@ -29,28 +29,93 @@
 <div id="mapContainer"></div>
 
 <script>
-    let platform = new H.service.Platform({
-      apikey: "N8-oXeUzAsSNYiIslD8HVoqFc3wmxL4PlDlWLUQXRCg"
-    });
+    let platform = null;
+    let layers = null;
+    let map = null;
+    let behavior = null;
+    let ui = null;
 
-    let layers = platform.createDefaultLayers();
-    let map = new H.Map(
-      document.getElementById("mapContainer"),
-      layers.vector.normal.map,
-      {
-        zoom: 10,
-        center: { lat: 10.762622, lng: 106.660172 }
+    let _pendingPayload = null;
+
+    function showBanner(msg) {
+      try {
+        let b = document.getElementById('hereBanner');
+        if (!b) {
+          b = document.createElement('div');
+          b.id = 'hereBanner';
+          b.style.position = 'absolute';
+          b.style.top = '12px';
+          b.style.left = '12px';
+          b.style.right = '12px';
+          b.style.zIndex = '9999';
+          b.style.padding = '10px 12px';
+          b.style.borderRadius = '12px';
+          b.style.background = 'rgba(255,255,255,0.95)';
+          b.style.boxShadow = '0 10px 24px rgba(0,0,0,0.18)';
+          b.style.fontFamily = 'Arial, sans-serif';
+          b.style.fontSize = '13px';
+          document.body.appendChild(b);
+        }
+        b.textContent = msg;
+      } catch (_) {}
+    }
+
+    function getApiKey() {
+      const v = window.HERE_API_KEY || window.hereApiKey || '';
+      return (typeof v === 'string') ? v.trim() : '';
+    }
+
+    function initMap(apiKey) {
+      platform = new H.service.Platform({ apikey: apiKey });
+      layers = platform.createDefaultLayers();
+      map = new H.Map(
+        document.getElementById("mapContainer"),
+        layers.vector.normal.map,
+        {
+          zoom: 10,
+          center: { lat: 10.762622, lng: 106.660172 }
+        }
+      );
+      behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+      ui = H.ui.UI.createDefault(map, layers);
+      window.addEventListener('resize', () => map.getViewPort().resize());
+
+      // nếu đã có payload chờ -> render luôn
+      if (_pendingPayload) {
+        const tmp = _pendingPayload;
+        _pendingPayload = null;
+        window.updateMap(tmp);
       }
-    );
+    }
 
-    let behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-    let ui = H.ui.UI.createDefault(map, layers);
+    // Flutter có thể gọi trước: window.setHereApiKey('...')
+    window.setHereApiKey = function(key) {
+      window.HERE_API_KEY = (key || '').toString();
+      if (!map) {
+        const k = getApiKey();
+        if (k && k.length > 10) {
+          initMap(k);
+        } else {
+          showBanner('Thiếu HERE API key.');
+        }
+      }
+    };
 
     // ✅ Group tách riêng marker / polyline (tránh clear nhầm & tránh "dữ liệu ma")
-    const markersGroup = new H.map.Group();
-    const polylinesGroup = new H.map.Group();
-    map.addObject(markersGroup);
-    map.addObject(polylinesGroup);
+    let markersGroup = null;
+    let polylinesGroup = null;
+
+    function ensureGroups() {
+      if (!map) return;
+      if (!markersGroup) {
+        markersGroup = new H.map.Group();
+        map.addObject(markersGroup);
+      }
+      if (!polylinesGroup) {
+        polylinesGroup = new H.map.Group();
+        map.addObject(polylinesGroup);
+      }
+    }
 
     function clearMarkers() { markersGroup.removeAll(); }
     function clearPolylines() { polylinesGroup.removeAll(); }
@@ -108,6 +173,21 @@
     // Flutter → updateMap(payloadJsonString)
     window.updateMap = function(payloadStr) {
       if (!payloadStr) return;
+
+      // chưa có map (do chưa inject key) -> giữ payload
+      if (!map) {
+        _pendingPayload = payloadStr;
+        const k = getApiKey();
+        if (k && k.length > 10) {
+          initMap(k);
+        } else {
+          showBanner('Thiếu HERE API key.');
+        }
+        return;
+      }
+
+      ensureGroups();
+
       let data = {};
       try { data = JSON.parse(payloadStr); } catch (e) { return; }
 
@@ -136,8 +216,16 @@
       if (data.zoom != null) map.setZoom(Number(data.zoom), true);
     };
 
-    // Resize
-    window.addEventListener('resize', () => map.getViewPort().resize());
+    // Boot: nếu page load đã có key sẵn
+    (function boot() {
+      const k = getApiKey();
+      if (k && k.length > 10) {
+        initMap(k);
+      } else {
+        // Không init ngay — chờ Flutter inject key
+        showBanner('Đang chờ HERE API key...');
+      }
+    })();
 </script>
 </body>
 </html>

@@ -6,12 +6,8 @@
         android:label="here_map"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <meta-data
-            android:name="com.here.sdk.access_key_id"
-            android:value="N8-oXeUzAsSNYiIslD8HVoqFc3wmxL4PlDlWLUQXRCg"/>
-        <meta-data
-            android:name="com.here.sdk.access_key_secret"
-            android:value="1MeB646r-sjcm1Ebd1rBkR-kCdIvGs9ax-4jz93CZw7k0tD2JwJMPh-LFX0nCQVqB6OstOclSUPuaL1UQvY_tQ"/>
+        <!-- NOTE: App hiện dùng HERE JS + REST, không dùng HERE SDK native.
+             Không hardcode key/secret trong AndroidManifest. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -7,6 +7,7 @@ import '../models/saved_route_model.dart';
 import '../models/stop_model.dart';
 import '../models/truck_option_model.dart';
 import '../models/vehicle_model.dart';
+import '../services/analytics_service.dart';
 import 'app_state.dart';
 
 class AppNotifier extends ChangeNotifier {
@@ -191,6 +192,17 @@ class AppNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// ✅ Replace current stops bằng 1 danh sách mới (thường dùng sau khi optimize).
+  /// Danh sách truyền vào nên là các điểm đã có lat/lng thật (không gồm ô trống).
+  void applyStops(List<StopModel> newStops) {
+    if (newStops.isEmpty) return;
+    _state = _state.copyWith(stops: List.of(newStops));
+    _normalizeStops();
+    _saveStops();
+    AnalyticsService.track('stops_applied', {'count': newStops.length});
+    notifyListeners();
+  }
+
   // ✅ Gợi ý phương tiện: van / truck (bỏ VehicleSelector)
   void setSuggestedVehicleMode(String mode) {
     _state = _state.copyWith(currentVehicle: _pickVehicleByMode(mode));
@@ -207,16 +219,22 @@ class AppNotifier extends ChangeNotifier {
     final list = List<SavedRouteModel>.from(_state.savedRoutes)..add(r);
     _state = _state.copyWith(savedRoutes: list);
     _saveSavedRoutes();
+    AnalyticsService.track('saved_route_created', {
+      'route_id': r.id,
+      'stop_count': r.stops.length,
+    });
     notifyListeners();
   }
 
   void setTraffic(bool enabled) {
     _state = _state.copyWith(trafficEnabled: enabled);
+    AnalyticsService.track('traffic_toggled', {'enabled': enabled});
     notifyListeners();
   }
 
   void setMapMode(String mode) {
     _state = _state.copyWith(mapMode: mode);
+    AnalyticsService.track('map_mode_changed', {'mode': mode});
     notifyListeners();
   }
 
@@ -230,6 +248,7 @@ class AppNotifier extends ChangeNotifier {
     _state = _state.copyWith(stops: [_emptyStop()]);
     _normalizeStops();
     _saveStops();
+    AnalyticsService.track('plan_reset', {});
     notifyListeners();
   }
 
@@ -251,6 +270,10 @@ class AppNotifier extends ChangeNotifier {
     _normalizeStops();
     _saveStops();
     _saveTruck();
+    AnalyticsService.track('saved_route_loaded', {
+      'route_id': route.id,
+      'stop_count': route.stops.length,
+    });
     notifyListeners();
   }
 
@@ -261,6 +284,7 @@ class AppNotifier extends ChangeNotifier {
 
     _state = _state.copyWith(savedRoutes: list);
     _saveSavedRoutes();
+    AnalyticsService.track('saved_route_deleted', {'route_id': id});
     notifyListeners();
   }
 }

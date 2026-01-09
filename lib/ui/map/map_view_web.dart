@@ -9,8 +9,13 @@ import 'dart:js_interop';
 
 import 'dart:ui_web' as ui_web;
 
+import '../../app_config.dart';
+
 @JS('updateMap')
 external void _updateMap(JSString payload, JSString containerId);
+
+@JS('setHereApiKey')
+external void _setHereApiKey(JSString key);
 
 @JS('resizeHereMap')
 external void _resizeHereMap(JSString containerId);
@@ -48,6 +53,10 @@ class _MapViewWebState extends State<MapViewWeb> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Inject HERE API key (nếu có)
+      if (AppConfig.hereApiKey.isNotEmpty) {
+        _setHereApiKey(AppConfig.hereApiKey.toJS);
+      }
       _startPump();
       _sendPayload();
     });

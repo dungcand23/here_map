@@ -1,13 +1,19 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/stop_model.dart';
 import '../../state/app_notifier.dart';
+import '../../b2b/b2b_notifier.dart';
+import '../../b2b/ui/screens/team_workspace_screen.dart';
+import '../../b2b/repositories/b2b_container.dart';
+import '../../b2b/utils/share_utils.dart';
 import '../../services/routing_service.dart';
+import '../../services/waypoints_sequence_service.dart';
+import '../../services/api_exceptions.dart';
 import '../map/map_view.dart';
 import '../widgets/bottom_sheet_panel.dart';
+import 'analytics_dashboard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,25 +30,56 @@ class _HomeScreenState extends State<HomeScreen> {
 
   AppNotifier? _app;
   String? _lastSig;
+  bool _skipResetOnce = false;
 
   bool get _isDesktopLike =>
-      kIsWeb || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+      kIsWeb ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.macOS;
 
-  // ✅ Placeholder auth label (sau này bạn thay bằng auth thật theo Option C)
-  String get _authLabel => 'Chưa đăng nhập';
+  void _openTeamWorkspace() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const TeamWorkspaceScreen()),
+    );
+  }
 
   void _openSettings() {
-    // TODO: mở screen/dialog settings
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Mở Cài đặt (placeholder)')),
     );
   }
 
-  void _googleLogin() {
-    // TODO: triển khai Google login theo option C
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Google Login (placeholder)')),
-    );
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ Web: support share link .../?code=xxx
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final code = Uri.base.queryParameters['code'];
+        if (code == null || code.trim().isEmpty) return;
+
+        final shareRepo = context.read<B2BContainer>().share;
+        shareRepo.resolveShareCode(code.trim()).then((payload) {
+          if (payload == null) return;
+
+          final app = context.read<AppNotifier>();
+          final saved = ShareUtils.toSavedRoute(payload);
+          app.setSuggestedVehicleMode(payload.vehicleMode);
+          app.updateTruck(payload.truckOption);
+          app.setTraffic(payload.trafficEnabled);
+          app.loadSavedRoute(saved);
+          app.saveRoute(saved);
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Đã import tuyến từ share link')),
+            );
+          }
+        });
+      });
+    }
   }
 
   @override
@@ -53,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _app?.removeListener(_onAppChanged);
       _app = app;
       _app!.addListener(_onAppChanged);
-      _onAppChanged(); // ✅ lần đầu cũng set payload để map init
+      _onAppChanged();
     }
   }
 
@@ -72,12 +109,17 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
 
     final sig = filled.map((e) => '${e.name}|${e.lat}|${e.lng}').join('||');
-    if (sig == _lastSig) return;
+    if (sig == _lastSig) {
+      _skipResetOnce = false;
+      return;
+    }
     _lastSig = sig;
 
-    // ✅ Khi danh sách điểm thay đổi: route cũ không còn hợp lệ.
-    // Clear polyline + reset thống kê để tránh "dữ liệu ma".
-    _isRouting = false;
+    if (_skipResetOnce) {
+      _skipResetOnce = false;
+    } else {
+      _isRouting = false;
+    }
     _distanceKm = 0;
     _durationMin = 0;
 
@@ -103,7 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
           'center': {'lat': filled.last.lat, 'lng': filled.last.lng},
           'zoom': 13.0,
         } else ...{
-          // default center nếu chưa có điểm nào
           'center': {'lat': 10.776, 'lng': 106.700},
           'zoom': 12.0,
         }
@@ -141,11 +182,55 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() => _isRouting = true);
 
-    final result = await RoutingService.buildRoute(
-      stops: stops,
-      vehicle: vehicle,
-      truck: s.truckOption,
-    );
+    // ✅ >=3 điểm: tối ưu thứ tự (giữ START, end-free) rồi mới gọi Routing v8.
+    var usedStops = List<StopModel>.from(stops);
+    if (usedStops.length >= 3) {
+      try {
+        final optimized = await WaypointsSequenceService.optimizeStops(
+          stops: usedStops,
+          vehicle: vehicle,
+          truck: s.truckOption,
+          trafficEnabled: s.trafficEnabled,
+          improveFor: 'time',
+        );
+
+        if (optimized.length >= 2) {
+          _skipResetOnce = true;
+          app.applyStops(optimized);
+          usedStops = optimized;
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Tối ưu tuyến thất bại, sẽ định tuyến theo thứ tự hiện tại.'),
+            ),
+          );
+        }
+      }
+    }
+
+    RoutingResult? result;
+    try {
+      result = await RoutingService.buildRoute(
+        stops: usedStops,
+        vehicle: vehicle,
+        truck: s.truckOption,
+        trafficEnabled: s.trafficEnabled,
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      result = null;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể tạo tuyến lúc này')),
+        );
+      }
+      result = null;
+    }
 
     if (!mounted) return;
 
@@ -164,9 +249,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final distanceKm = result.distanceKm;
     final durationMin = result.durationMin;
-    final polyline = result.polyline; // list {lat,lng}
+    final polylinesEncoded = result.polylinesEncoded;
 
-    final filled = stops
+    final filled = usedStops
         .where((e) => e.name.trim().isNotEmpty && (e.lat != 0 || e.lng != 0))
         .toList();
 
@@ -190,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'clearMarkers': true,
         'markers': markers,
         'clearPolylines': true,
-        'polyline': polyline,
+        'polylinesEncoded': polylinesEncoded, // 👈 gửi encoded sang JS để decode
         if (filled.isNotEmpty)
           'center': {'lat': filled.first.lat, 'lng': filled.first.lng},
         if (filled.isNotEmpty) 'zoom': 12.0,
@@ -201,6 +286,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppNotifier>();
+    final b2b = context.watch<B2BNotifier>();
+    final canSaveTeamRoute = b2b.isSignedIn && b2b.hasTeam && b2b.canEditRoutes;
 
     if (_isDesktopLike) {
       return Scaffold(
@@ -229,8 +316,36 @@ class _HomeScreenState extends State<HomeScreen> {
                           onResetPlan: () => _resetPlan(app),
                           onLoadSavedRoute: (r) => app.loadSavedRoute(r),
                           onOpenSettings: _openSettings,
-                          onGoogleLogin: _googleLogin,
-                          authLabel: _authLabel,
+                          onOpenTeamWorkspace: _openTeamWorkspace,
+                          onOpenAnalytics: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen()),
+                            );
+                          },
+                          authLabel: b2b.authLabel(),
+                          canSaveTeamRoute: canSaveTeamRoute,
+                          onSaveTeamRoute: (routeName) async {
+                            final s = app.state;
+                            final ok = await b2b.saveCurrentRouteToTeam(
+                              name: routeName,
+                              distanceKm: _distanceKm,
+                              durationMin: _durationMin,
+                              stops: List.of(s.stops.where((e) => e.name.trim().isNotEmpty)),
+                              vehicle: s.currentVehicle,
+                              truck: s.truckOption,
+                              trafficEnabled: s.trafficEnabled,
+                              mapMode: s.mapMode,
+                            );
+                            if (ok == null && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Không thể lưu team (chưa login/team hoặc thiếu quyền)')),
+                              );
+                            } else if (ok != null && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Đã lưu tuyến vào team')),
+                              );
+                            }
+                          },
                         ),
                       ),
                     ),
@@ -272,8 +387,36 @@ class _HomeScreenState extends State<HomeScreen> {
                 onResetPlan: () => _resetPlan(app),
                 onLoadSavedRoute: (r) => app.loadSavedRoute(r),
                 onOpenSettings: _openSettings,
-                onGoogleLogin: _googleLogin,
-                authLabel: _authLabel,
+                onOpenTeamWorkspace: _openTeamWorkspace,
+                onOpenAnalytics: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen()),
+                  );
+                },
+                authLabel: b2b.authLabel(),
+                canSaveTeamRoute: canSaveTeamRoute,
+                onSaveTeamRoute: (routeName) async {
+                  final s = app.state;
+                  final ok = await b2b.saveCurrentRouteToTeam(
+                    name: routeName,
+                    distanceKm: _distanceKm,
+                    durationMin: _durationMin,
+                    stops: List.of(s.stops.where((e) => e.name.trim().isNotEmpty)),
+                    vehicle: s.currentVehicle,
+                    truck: s.truckOption,
+                    trafficEnabled: s.trafficEnabled,
+                    mapMode: s.mapMode,
+                  );
+                  if (ok == null && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Không thể lưu team (chưa login/team hoặc thiếu quyền)')),
+                    );
+                  } else if (ok != null && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Đã lưu tuyến vào team')),
+                    );
+                  }
+                },
               );
             },
           ),

@@ -56,3 +56,9 @@ plugins/**/ios/Frameworks/**/*.framework
 plugins/**/*.tar.gz
 plugins/**/*.zip
 plugins/**/*.dSYM/
+
+# =========================
+# Local env files (KHÔNG COMMIT)
+# =========================
+env.*.json
+!env.example.json

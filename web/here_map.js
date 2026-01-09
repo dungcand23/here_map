@@ -47,6 +47,11 @@ function getApiKey() {
   return (typeof v === 'string') ? v.trim() : '';
 }
 
+// Flutter Web có thể gọi để inject key runtime
+window.setHereApiKey = function (k) {
+  window.HERE_API_KEY = (k || '').toString();
+};
+
 function disposeMap() {
   try { ro?.disconnect(); } catch (_) {}
   try { map?.dispose(); } catch (_) {}
@@ -143,7 +148,6 @@ function createNumberedDomMarker(lat, lng, label, color) {
   span.style.lineHeight = '1';
   el.appendChild(span);
 
-  // Nếu DomMarker có sẵn -> dùng
   if (H.map.DomMarker) {
     const icon = new H.map.DomIcon(el);
     const m = new H.map.DomMarker({ lat, lng }, { icon });
@@ -151,7 +155,6 @@ function createNumberedDomMarker(lat, lng, label, color) {
     return m;
   }
 
-  // Fallback: marker thường (không số) nếu browser thiếu DomMarker
   const m = new H.map.Marker({ lat, lng });
   m.setZIndex(9999);
   return m;
@@ -167,7 +170,8 @@ window.updateMap = function (payloadStr, containerId) {
 
   const hasStops = Array.isArray(payload.stops) && payload.stops.length > 0;
   const hasMarkers = Array.isArray(payload.markers) && payload.markers.length > 0;
-  const hasPolyline = Array.isArray(payload.polyline) && payload.polyline.length > 1;
+  const hasPolyline = Array.isArray(payload.polyline) && payload.polyline.length > 1; // legacy
+  const hasPolylinesEncoded = Array.isArray(payload.polylinesEncoded) && payload.polylinesEncoded.length > 0;
 
   _hereLog('[HERE] Nhận payload', {
     clearMarkers: payload.clearMarkers === true,
@@ -175,18 +179,17 @@ window.updateMap = function (payloadStr, containerId) {
     markersLen: Array.isArray(payload.markers) ? payload.markers.length : 0,
     stopsLen: Array.isArray(payload.stops) ? payload.stops.length : 0,
     polylineLen: Array.isArray(payload.polyline) ? payload.polyline.length : 0,
+    polylinesEncodedLen: Array.isArray(payload.polylinesEncoded) ? payload.polylinesEncoded.length : 0,
   });
 
-  // ✅ KHÔNG clear chỉ vì markers=[]
   if (payload.clearMarkers === true || hasStops || hasMarkers) clearMarkers();
-  if (payload.clearPolylines === true || hasPolyline) clearPolylines();
+  if (payload.clearPolylines === true || hasPolyline || hasPolylinesEncoded) clearPolylines();
 
   let markers = [];
   if (Array.isArray(payload.markers)) markers = payload.markers;
 
   let lastLat = null, lastLng = null;
 
-  // ✅ draw numbered markers
   if (markers.length > 0) {
     for (let i = 0; i < markers.length; i++) {
       const m = markers[i] || {};
@@ -208,7 +211,33 @@ window.updateMap = function (payloadStr, containerId) {
 
   // ----- POLYLINE -----
   let routeFitted = false;
-  if (hasPolyline) {
+
+  // Preferred: decode on JS using HERE native decoder
+  if (hasPolylinesEncoded) {
+    try {
+      for (let i = 0; i < payload.polylinesEncoded.length; i++) {
+        const enc = payload.polylinesEncoded[i];
+        if (!enc || typeof enc !== 'string') continue;
+
+        const ls = H.geo.LineString.fromFlexiblePolyline(enc);
+        if (!ls || ls.getPointCount() < 2) continue;
+
+        const pl = new H.map.Polyline(ls, { style: { lineWidth: 5, strokeColor: '#1A73E8' } });
+        polylinesGroup.addObject(pl);
+      }
+
+      const bbox = polylinesGroup.getBoundingBox && polylinesGroup.getBoundingBox();
+      if (bbox) {
+        map.getViewModel().setLookAtData({ bounds: bbox }, true);
+        routeFitted = true;
+      }
+
+      _hereLog(`[HERE] Đã vẽ polyline (encoded sections: ${payload.polylinesEncoded.length})`);
+    } catch (e) {
+      console.warn('[HERE] draw polyline (encoded) failed', e);
+    }
+  } else if (hasPolyline) {
+    // legacy list-of-points
     try {
       const ls = new H.geo.LineString();
       for (let i = 0; i < payload.polyline.length; i++) {
@@ -216,6 +245,7 @@ window.updateMap = function (payloadStr, containerId) {
         const lat = Number(pt.lat);
         const lng = Number(pt.lng);
         if (!isFinite(lat) || !isFinite(lng)) continue;
+        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
         ls.pushPoint({ lat, lng });
       }
 

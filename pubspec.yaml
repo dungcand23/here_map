@@ -17,6 +17,10 @@ dependencies:
   http: ^1.2.0
   shared_preferences: ^2.2.2
   web: ^0.5.1
+  geolocator: ^10.1.0
+  crypto: ^3.0.6
+  uuid: ^4.5.2
+  qr_flutter: ^4.1.0
 
   # dùng html cho web
   flutter_web_plugins:

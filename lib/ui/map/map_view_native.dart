@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../app_config.dart';
+
 class MapViewNative extends StatefulWidget {
   final Map<String, dynamic>? payload;
 
@@ -30,6 +32,12 @@ class _MapViewNativeState extends State<MapViewNative> {
         NavigationDelegate(
           onPageFinished: (_) {
             _pageLoaded = true;
+            // Inject HERE key (nếu có)
+            if (AppConfig.hereApiKey.isNotEmpty) {
+              _controller.runJavaScript(
+                'try { window.setHereApiKey(${jsonEncode(AppConfig.hereApiKey)}); } catch(e) {}',
+              );
+            }
             _sendUpdate();
           },
         ),

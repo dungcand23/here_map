@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/nearby_service.dart';
 import '../../models/stop_model.dart';
-import '../../app_config.dart';
+import '../../services/location_service.dart';
+import '../../services/api_exceptions.dart';
 
 class NearbyWidget extends StatefulWidget {
   final void Function(StopModel) onSelectedStop;
@@ -23,12 +24,26 @@ class _NearbyWidgetState extends State<NearbyWidget> {
       _loading = true;
     });
 
-    // Tạm dùng toạ độ default, sau có thể dùng GPS
-    final results = await NearbyService.searchNearby(
-      lat: AppConfig.defaultLat,
-      lng: AppConfig.defaultLng,
-      type: type,
-    );
+    List<StopModel> results = [];
+    try {
+      final loc = await LocationService.getMyLocation();
+      final lat = (loc['lat'] ?? 0).toDouble();
+      final lng = (loc['lng'] ?? 0).toDouble();
+
+      results = await NearbyService.searchNearby(
+        lat: lat,
+        lng: lng,
+        type: type,
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không thể tìm quanh đây lúc này')));
+      }
+    }
 
     if (!mounted) return;
     setState(() {

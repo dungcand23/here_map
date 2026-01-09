@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../models/stop_model.dart';
 import '../../services/location_service.dart';
+import '../../services/analytics_service.dart';
+import '../../services/api_exceptions.dart';
 import '../../services/search_service.dart';
 
 class SearchStopField extends StatefulWidget {
@@ -32,7 +34,7 @@ class _SearchStopFieldState extends State<SearchStopField> {
   bool _locating = false;
   bool _committing = false;
 
-  StopModel? _lastPicked;
+  String _lastQuery = '';
 
   double _toDouble(dynamic v) => v is num ? v.toDouble() : 0.0;
 
@@ -44,20 +46,14 @@ class _SearchStopFieldState extends State<SearchStopField> {
   }
 
   void _onFocusChanged() {
-    // ✅ Mất focus mà chưa pick -> commit để ra tọa độ (giúp ghim marker)
-    if (!_focus.hasFocus) {
-      final text = _c.text.trim();
-      if (text.isNotEmpty && _lastPicked == null) {
-        Future.microtask(_commit);
-      }
-    }
     if (mounted) setState(() {});
   }
 
   @override
   void didUpdateWidget(covariant SearchStopField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialText != widget.initialText && _c.text != widget.initialText) {
+    if (oldWidget.initialText != widget.initialText &&
+        _c.text != widget.initialText) {
       _c.text = widget.initialText;
     }
   }
@@ -70,20 +66,37 @@ class _SearchStopFieldState extends State<SearchStopField> {
     super.dispose();
   }
 
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+    );
+  }
+
   Future<List<StopModel>> _fetch(String query) async {
     final loc = await LocationService.getMyLocation();
     final lat = _toDouble(loc['lat']);
     final lng = _toDouble(loc['lng']);
 
-    return SearchService.autosuggest(
-      query: query,
-      lat: lat,
-      lng: lng,
-    );
+    try {
+      return await SearchService.autosuggest(
+        query: query,
+        lat: lat,
+        lng: lng,
+      );
+    } on ApiException catch (e) {
+      _toast(e.message);
+      return [];
+    } catch (_) {
+      _toast('Không thể tìm kiếm lúc này');
+      return [];
+    }
   }
 
   Future<void> _query(String q) async {
     final query = q.trim();
+    _lastQuery = query;
+
     if (query.isEmpty) {
       if (!mounted) return;
       setState(() => _items = []);
@@ -103,7 +116,6 @@ class _SearchStopFieldState extends State<SearchStopField> {
   }
 
   void _onChanged(String v) {
-    _lastPicked = null;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () => _query(v));
   }
@@ -115,15 +127,10 @@ class _SearchStopFieldState extends State<SearchStopField> {
       final query = _c.text.trim();
       if (query.isEmpty) return;
 
-      if (_items.isNotEmpty) {
-        _pick(_items.first);
-        return;
-      }
-
       if (!mounted) return;
       setState(() => _loading = true);
 
-      final results = await _fetch(query);
+      final results = await SearchService.geocode(query: query, limit: 5);
 
       if (!mounted) return;
       setState(() {
@@ -132,21 +139,34 @@ class _SearchStopFieldState extends State<SearchStopField> {
       });
 
       if (results.isNotEmpty) {
-        _pick(results.first);
+        _pick(results.first, source: 'geocode_commit', rank: 1);
+      } else {
+        _toast('Không tìm thấy địa điểm. Hãy thử nhập chi tiết hơn.');
       }
     } finally {
       _committing = false;
     }
   }
 
-  void _pick(StopModel s) {
-    _lastPicked = s;
+  void _pick(StopModel s, {required String source, int? rank}) {
     _c.text = s.name;
+
+    // best-effort analytics (không để crash luồng chọn)
+    try {
+      AnalyticsService.track('autosuggest_item_selected', {
+        'source': source,
+        'rank': rank,
+        'q_len': _lastQuery.length,
+        'has_location': (s.lat != 0 || s.lng != 0),
+      });
+    } catch (_) {}
 
     if (kDebugMode) {
       debugPrint('[Flutter] Pick stop: "${s.name}" (${s.lat}, ${s.lng})');
     }
 
+    // ✅ Quan trọng: clear list trước, rồi call onSelected
+    // để UI không rebuild “mất click”.
     setState(() => _items = []);
     widget.onSelected(s);
     FocusScope.of(context).unfocus();
@@ -169,9 +189,16 @@ class _SearchStopFieldState extends State<SearchStopField> {
       name: 'Vị trí hiện tại',
       lat: lat,
       lng: lng,
+      subtitle: '',
     );
 
-    _pick(stop);
+    _pick(stop, source: 'current_location');
+  }
+
+  void _clearField() {
+    _c.clear();
+    setState(() => _items = []);
+    widget.onSelected(const StopModel(lat: 0, lng: 0, name: '', subtitle: ''));
   }
 
   @override
@@ -187,7 +214,10 @@ class _SearchStopFieldState extends State<SearchStopField> {
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
             hintText: widget.hintText,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            isDense: true,
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             prefixIcon: showMyLocationButton
                 ? IconButton(
               tooltip: 'Vị trí hiện tại',
@@ -198,9 +228,9 @@ class _SearchStopFieldState extends State<SearchStopField> {
                 height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-                  : const Icon(Icons.my_location),
+                  : const Icon(Icons.my_location, size: 18),
             )
-                : null,
+                : const Icon(Icons.search, size: 18),
             suffixIcon: _loading
                 ? const Padding(
               padding: EdgeInsets.all(12),
@@ -214,18 +244,15 @@ class _SearchStopFieldState extends State<SearchStopField> {
                 ? null
                 : IconButton(
               icon: const Icon(Icons.close),
-              onPressed: () {
-                _c.clear();
-                _lastPicked = null;
-                setState(() => _items = []);
-                widget.onSelected(const StopModel(lat: 0, lng: 0, name: ''));
-              },
+              tooltip: 'Xoá',
+              onPressed: _clearField,
             )),
           ),
           onChanged: _onChanged,
           onSubmitted: (_) => _commit(),
-          onEditingComplete: () => _commit(),
         ),
+
+        // ✅ FIX: không phụ thuộc focus nữa -> click item không bị mất
         if (_items.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 6),
@@ -233,7 +260,9 @@ class _SearchStopFieldState extends State<SearchStopField> {
               color: Colors.white,
               border: Border.all(color: Colors.black12),
               borderRadius: BorderRadius.circular(10),
-              boxShadow: const [BoxShadow(blurRadius: 10, color: Color(0x12000000))],
+              boxShadow: const [
+                BoxShadow(blurRadius: 10, color: Color(0x12000000))
+              ],
             ),
             child: ListView.separated(
               shrinkWrap: true,
@@ -244,8 +273,20 @@ class _SearchStopFieldState extends State<SearchStopField> {
                 final it = _items[i];
                 return ListTile(
                   dense: true,
-                  title: Text(it.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  onTap: () => _pick(it),
+                  leading: const Icon(Icons.place_outlined, size: 18),
+                  title: Text(
+                    it.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: it.subtitle.trim().isEmpty
+                      ? null
+                      : Text(
+                    it.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => _pick(it, source: 'autosuggest', rank: i + 1),
                 );
               },
             ),
