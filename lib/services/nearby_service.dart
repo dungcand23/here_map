@@ -14,7 +14,7 @@ class NearbyService {
     required String type,
   }) async {
     if (!AppConfig.hasHereApiKey) {
-      throw const MissingApiKeyException();
+      throw MissingApiKeyException();
     }
     String? categories;
     switch (type) {

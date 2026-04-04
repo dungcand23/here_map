@@ -17,7 +17,8 @@
   <script src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
   <script src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
 
-  <!-- HERE API key sẽ được inject từ Flutter (MapViewWeb) qua --dart-define=HERE_API_KEY=... -->
+  <!-- HERE API key is injected by Flutter MapViewWeb. -->
+  <!-- This package also has an embedded fallback key in lib/app_env_defaults.dart. -->
 
   <script src="here_map.js"></script>
   <script src="flutter.js" defer></script>

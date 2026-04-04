@@ -2,18 +2,49 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "here_map (dev)",
+      "name": "here_map (quick)",
       "request": "launch",
-      "type": "dart",
-      "toolArgs": ["--dart-define-from-file=env.dev.json"]
+      "type": "dart"
     },
     {
-      "name": "here_map (web dev)",
+      "name": "here_map (windows quick)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows"
+    },
+    {
+      "name": "here_map (web quick)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "here_map (env dev)",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": [
+        "--dart-define-from-file=env.dev.json"
+      ]
+    },
+    {
+      "name": "here_map (windows env dev)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows",
+      "toolArgs": [
+        "--dart-define-from-file=env.dev.json"
+      ]
+    },
+    {
+      "name": "here_map (web env dev)",
       "request": "launch",
       "type": "dart",
       "flutterMode": "debug",
       "deviceId": "chrome",
-      "toolArgs": ["--dart-define-from-file=env.dev.json"]
+      "toolArgs": [
+        "--dart-define-from-file=env.dev.json"
+      ]
     }
   ]
 }

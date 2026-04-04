@@ -12,12 +12,15 @@ class SearchStopField extends StatefulWidget {
   final String hintText;
   final String initialText;
   final void Function(StopModel) onSelected;
+  /// Nếu được truyền vào, nút X sẽ gọi hàm này thay vì chỉ xóa text
+  final VoidCallback? onRemove;
 
   const SearchStopField({
     super.key,
     required this.hintText,
     required this.initialText,
     required this.onSelected,
+    this.onRemove,
   });
 
   @override
@@ -244,8 +247,8 @@ class _SearchStopFieldState extends State<SearchStopField> {
                 ? null
                 : IconButton(
               icon: const Icon(Icons.close),
-              tooltip: 'Xoá',
-              onPressed: _clearField,
+              tooltip: widget.onRemove != null ? 'Bỏ điểm dừng' : 'Xoá',
+              onPressed: widget.onRemove ?? _clearField,
             )),
           ),
           onChanged: _onChanged,
@@ -271,22 +274,59 @@ class _SearchStopFieldState extends State<SearchStopField> {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final it = _items[i];
-                return ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.place_outlined, size: 18),
-                  title: Text(
-                    it.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: it.subtitle.trim().isEmpty
-                      ? null
-                      : Text(
-                    it.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                return InkWell(
                   onTap: () => _pick(it, source: 'autosuggest', rank: i + 1),
+                  borderRadius: i == 0
+                      ? const BorderRadius.vertical(top: Radius.circular(10))
+                      : i == _items.length - 1
+                          ? const BorderRadius.vertical(bottom: Radius.circular(10))
+                          : BorderRadius.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(top: 2, right: 12),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F0FE),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.place, size: 20, color: Color(0xFF1A73E8)),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                it.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1A1A1A),
+                                ),
+                              ),
+                              if (it.subtitle.trim().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  it.subtitle,
+                                  softWrap: true,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF666666),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
             ),

@@ -14,8 +14,10 @@ class ApiException implements Exception {
   String toString() => 'ApiException(message: $message, statusCode: $statusCode, endpoint: $endpoint)';
 }
 
-/// Thiếu HERE API key (do chưa set --dart-define).
+/// Thiếu HERE API key.
 class MissingApiKeyException extends ApiException {
   const MissingApiKeyException()
-      : super('Thiếu HERE API key. Hãy chạy app với --dart-define=HERE_API_KEY=...');
+      : super(
+          'Thiếu HERE API key. Hãy chạy bằng env.dev.json hoặc cấu hình HERE_API_KEY trong AppConfig.',
+        );
 }

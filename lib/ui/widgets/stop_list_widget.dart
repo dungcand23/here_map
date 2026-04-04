@@ -75,25 +75,10 @@ class StopListWidget extends StatelessWidget {
                   hintText: _hint(i),
                   initialText: s.name,
                   onSelected: (picked) => onUpdateStop(i, picked),
+                  onRemove: isIntermediate ? () => onRemove(i) : null,
                 ),
               ),
-              const SizedBox(width: 8),
-
-              // ✅ Chỉ hiện X khi stop có dữ liệu
-              if (!empty)
-                IconButton(
-                  tooltip: isIntermediate ? 'Bỏ điểm dừng' : 'Xoá nội dung',
-                  icon: const Icon(Icons.close),
-                  onPressed: () {
-                    if (isIntermediate) {
-                      onRemove(i); // remove hẳn stop trung gian
-                    } else {
-                      onClearStop(i); // clear A/B
-                    }
-                  },
-                )
-              else
-                const SizedBox(width: 40),
+              const SizedBox(width: 4),
 
               if (canDrag)
                 ReorderableDragStartListener(

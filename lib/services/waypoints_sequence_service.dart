@@ -29,7 +29,7 @@ class WaypointsSequenceService {
     if (stops.length < 3) return stops;
 
     if (!AppConfig.hasHereApiKey) {
-      throw const MissingApiKeyException();
+      throw MissingApiKeyException();
     }
 
     final requestId = DateTime.now().microsecondsSinceEpoch.toString();

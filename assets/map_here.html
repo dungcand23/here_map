@@ -1,109 +1,121 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <title>HERE Map</title>
-    <meta name="viewport" content="initial-scale=1.0,width=device-width" />
-    <style>
-        html, body {
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-          height: 100%;
-          width: 100%;
-        }
-        #mapContainer {
-          width: 100%;
-          height: 100%;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <title>HERE Map</title>
+  <meta name="viewport" content="initial-scale=1.0,width=device-width" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #f3f5f8;
+      font-family: Arial, sans-serif;
+    }
+    #mapContainer {
+      width: 100%;
+      height: 100%;
+      background: #f3f5f8;
+    }
+    #hereBanner {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 9999;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.96);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+      font-size: 13px;
+      line-height: 1.35;
+      display: none;
+    }
+  </style>
 
-    <script src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
-    <script src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
-    <script src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
-    <link rel="stylesheet" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
-    <script src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
+  <script src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
+  <link rel="stylesheet" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css" />
 </head>
 
 <body>
-<div id="mapContainer"></div>
+  <div id="mapContainer"></div>
+  <div id="hereBanner"></div>
 
-<script>
+  <script>
     let platform = null;
-    let layers = null;
     let map = null;
-    let behavior = null;
     let ui = null;
+    let behavior = null;
+    let markersGroup = null;
+    let polylinesGroup = null;
+    let currentKey = '';
+    let pendingPayload = null;
 
-    let _pendingPayload = null;
-
-    function showBanner(msg) {
+    function showBanner(message, tone) {
       try {
-        let b = document.getElementById('hereBanner');
-        if (!b) {
-          b = document.createElement('div');
-          b.id = 'hereBanner';
-          b.style.position = 'absolute';
-          b.style.top = '12px';
-          b.style.left = '12px';
-          b.style.right = '12px';
-          b.style.zIndex = '9999';
-          b.style.padding = '10px 12px';
-          b.style.borderRadius = '12px';
-          b.style.background = 'rgba(255,255,255,0.95)';
-          b.style.boxShadow = '0 10px 24px rgba(0,0,0,0.18)';
-          b.style.fontFamily = 'Arial, sans-serif';
-          b.style.fontSize = '13px';
-          document.body.appendChild(b);
+        const el = document.getElementById('hereBanner');
+        if (!el) return;
+        el.style.display = 'block';
+        el.textContent = message || '';
+        if (tone === 'error') {
+          el.style.background = 'rgba(252,232,230,0.97)';
+          el.style.color = '#8a1c1c';
+        } else if (tone === 'warn') {
+          el.style.background = 'rgba(255,244,229,0.97)';
+          el.style.color = '#8a5311';
+        } else {
+          el.style.background = 'rgba(255,255,255,0.97)';
+          el.style.color = '#1f2937';
         }
-        b.textContent = msg;
+      } catch (_) {}
+    }
+
+    function clearBanner() {
+      try {
+        const el = document.getElementById('hereBanner');
+        if (!el) return;
+        el.style.display = 'none';
+        el.textContent = '';
       } catch (_) {}
     }
 
     function getApiKey() {
-      const v = window.HERE_API_KEY || window.hereApiKey || '';
-      return (typeof v === 'string') ? v.trim() : '';
+      const meta = document.querySelector('meta[name="here-api-key"]');
+      const value =
+        window.HERE_API_KEY ||
+        window.hereApiKey ||
+        (meta ? meta.content : '') ||
+        '';
+      return typeof value === 'string' ? value.trim() : '';
     }
 
-    function initMap(apiKey) {
-      platform = new H.service.Platform({ apikey: apiKey });
-      layers = platform.createDefaultLayers();
-      map = new H.Map(
-        document.getElementById("mapContainer"),
-        layers.vector.normal.map,
-        {
-          zoom: 10,
-          center: { lat: 10.762622, lng: 106.660172 }
+    function resizeHereMap() {
+      try {
+        if (map) {
+          map.getViewPort().resize();
         }
-      );
-      behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-      ui = H.ui.UI.createDefault(map, layers);
-      window.addEventListener('resize', () => map.getViewPort().resize());
-
-      // nếu đã có payload chờ -> render luôn
-      if (_pendingPayload) {
-        const tmp = _pendingPayload;
-        _pendingPayload = null;
-        window.updateMap(tmp);
-      }
+      } catch (_) {}
     }
 
-    // Flutter có thể gọi trước: window.setHereApiKey('...')
-    window.setHereApiKey = function(key) {
-      window.HERE_API_KEY = (key || '').toString();
-      if (!map) {
-        const k = getApiKey();
-        if (k && k.length > 10) {
-          initMap(k);
-        } else {
-          showBanner('Thiếu HERE API key.');
-        }
-      }
-    };
-
-    // ✅ Group tách riêng marker / polyline (tránh clear nhầm & tránh "dữ liệu ma")
-    let markersGroup = null;
-    let polylinesGroup = null;
+    function disposeMap() {
+      try {
+        window.removeEventListener('resize', resizeHereMap);
+      } catch (_) {}
+      try {
+        if (map) map.dispose();
+      } catch (_) {}
+      platform = null;
+      map = null;
+      ui = null;
+      behavior = null;
+      markersGroup = null;
+      polylinesGroup = null;
+    }
 
     function ensureGroups() {
       if (!map) return;
@@ -117,115 +129,252 @@
       }
     }
 
-    function clearMarkers() { markersGroup.removeAll(); }
-    function clearPolylines() { polylinesGroup.removeAll(); }
+    function initMap() {
+      if (!window.H || !H.service || !H.Map) {
+        showBanner('Khong tai duoc HERE Maps JS.', 'error');
+        return false;
+      }
 
-    function markerSvgNumber(label, color) {
+      const apiKey = getApiKey();
+      if (!apiKey || apiKey.length < 10) {
+        showBanner('Thieu HERE API key.', 'warn');
+        return false;
+      }
+
+      if (map && currentKey === apiKey) {
+        ensureGroups();
+        resizeHereMap();
+        clearBanner();
+        return true;
+      }
+
+      if (map && currentKey !== apiKey) {
+        disposeMap();
+      }
+
+      currentKey = apiKey;
+      platform = new H.service.Platform({ apikey: apiKey });
+      const layers = platform.createDefaultLayers();
+      const baseLayer =
+        (layers.vector && layers.vector.normal && layers.vector.normal.map)
+          ? layers.vector.normal.map
+          : layers.normal.map;
+
+      map = new H.Map(
+        document.getElementById('mapContainer'),
+        baseLayer,
+        {
+          center: { lat: 10.762622, lng: 106.660172 },
+          zoom: 12,
+          pixelRatio: window.devicePixelRatio || 1
+        }
+      );
+
+      behavior = new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+      ui = H.ui.UI.createDefault(map, layers);
+
+      ensureGroups();
+
+      try {
+        window.removeEventListener('resize', resizeHereMap);
+      } catch (_) {}
+      window.addEventListener('resize', resizeHereMap);
+      resizeHereMap();
+      clearBanner();
+
+      if (pendingPayload) {
+        const payload = pendingPayload;
+        pendingPayload = null;
+        renderPayload(payload);
+      }
+
+      return true;
+    }
+
+    function clearMarkers() {
+      try {
+        if (markersGroup) markersGroup.removeAll();
+      } catch (_) {}
+    }
+
+    function clearPolylines() {
+      try {
+        if (polylinesGroup) polylinesGroup.removeAll();
+      } catch (_) {}
+    }
+
+    function markerSvg(label, color) {
       const fill = color || '#1A73E8';
       const text = String(label || '');
       return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34">
-        <circle cx="17" cy="17" r="14" fill="${fill}" />
-        <circle cx="17" cy="17" r="14" fill="none" stroke="white" stroke-width="3"/>
-        <text x="17" y="22" text-anchor="middle" font-family="Arial"
-              font-size="14" font-weight="700" fill="white">${text}</text>
-      </svg>`;
+        <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34">
+          <circle cx="17" cy="17" r="14" fill="${fill}" />
+          <circle cx="17" cy="17" r="14" fill="none" stroke="white" stroke-width="3"/>
+          <text x="17" y="22" text-anchor="middle" font-family="Arial"
+            font-size="14" font-weight="700" fill="white">${text}</text>
+        </svg>
+      `;
     }
 
-    function drawPolyline(polylinePayload) {
-      if (!polylinePayload) return;
+    function createMarker(lat, lng, label, color) {
+      const icon = new H.map.Icon(markerSvg(label, color));
+      return new H.map.Marker({ lat: lat, lng: lng }, { icon: icon });
+    }
 
-      // Flexible polyline string
-      if (typeof polylinePayload === 'string') {
-        try {
-          const ls = H.geo.LineString.fromFlexiblePolyline(polylinePayload);
-          const pl = new H.map.Polyline(ls, { style: { lineWidth: 6, strokeColor: '#1A73E8' } });
-          polylinesGroup.addObject(pl);
-          map.getViewModel().setLookAtData({ bounds: pl.getBoundingBox() }, true);
-          return;
-        } catch (e) {
-          console.error('[HERE][mobile] flexible polyline decode failed', e);
-        }
+    function drawPointsPolyline(points) {
+      if (!Array.isArray(points)) return false;
+      try {
+        const ls = new H.geo.LineString();
+        points.forEach((p) => {
+          const lat = Number(p.lat);
+          const lng = Number(p.lng);
+          if (isFinite(lat) && isFinite(lng)) {
+            ls.pushPoint({ lat: lat, lng: lng });
+          }
+        });
+        if (ls.getPointCount() < 2) return false;
+        const polyline = new H.map.Polyline(ls, {
+          style: { lineWidth: 6, strokeColor: '#1A73E8' }
+        });
+        polylinesGroup.addObject(polyline);
+        return true;
+      } catch (_) {
+        return false;
       }
+    }
 
-      // Points array [{lat,lng},...]
-      if (Array.isArray(polylinePayload)) {
-        try {
-          const ls = new H.geo.LineString();
-          polylinePayload.forEach(p => {
-            const lat = Number(p.lat);
-            const lng = Number(p.lng);
-            if (isFinite(lat) && isFinite(lng)) ls.pushPoint({ lat, lng });
+    function drawEncodedSections(sections) {
+      if (!Array.isArray(sections) || sections.length === 0) return false;
+      let drawn = false;
+      try {
+        sections.forEach((value) => {
+          if (typeof value !== 'string' || !value) return;
+          const ls = H.geo.LineString.fromFlexiblePolyline(value);
+          if (!ls || ls.getPointCount() < 2) return;
+          const polyline = new H.map.Polyline(ls, {
+            style: { lineWidth: 6, strokeColor: '#1A73E8' }
           });
-          if (ls.getPointCount() < 2) return;
-          const pl = new H.map.Polyline(ls, { style: { lineWidth: 6, strokeColor: '#1A73E8' } });
-          polylinesGroup.addObject(pl);
-          map.getViewModel().setLookAtData({ bounds: pl.getBoundingBox() }, true);
-          return;
-        } catch (e) {
-          console.error('[HERE][mobile] points polyline draw failed', e);
-        }
+          polylinesGroup.addObject(polyline);
+          drawn = true;
+        });
+      } catch (_) {
+        return false;
       }
-
-      console.warn('[HERE][mobile] Unsupported polyline format:', polylinePayload);
+      return drawn;
     }
 
-    // Flutter → updateMap(payloadJsonString)
-    window.updateMap = function(payloadStr) {
-      if (!payloadStr) return;
-
-      // chưa có map (do chưa inject key) -> giữ payload
-      if (!map) {
-        _pendingPayload = payloadStr;
-        const k = getApiKey();
-        if (k && k.length > 10) {
-          initMap(k);
-        } else {
-          showBanner('Thiếu HERE API key.');
+    function fitBestBounds() {
+      try {
+        if (polylinesGroup && polylinesGroup.getBoundingBox) {
+          const polyBounds = polylinesGroup.getBoundingBox();
+          if (polyBounds) {
+            map.getViewModel().setLookAtData({ bounds: polyBounds }, true);
+            return;
+          }
         }
+        if (markersGroup && markersGroup.getBoundingBox) {
+          const markerBounds = markersGroup.getBoundingBox();
+          if (markerBounds) {
+            map.getViewModel().setLookAtData({ bounds: markerBounds }, true);
+          }
+        }
+      } catch (_) {}
+    }
+
+    function renderPayload(payload) {
+      if (!payload) return;
+
+      if (!initMap()) {
+        pendingPayload = payload;
         return;
       }
 
       ensureGroups();
 
-      let data = {};
-      try { data = JSON.parse(payloadStr); } catch (e) { return; }
+      const markers = Array.isArray(payload.markers) ? payload.markers : [];
+      const pointPolyline = payload.polyline;
+      const encodedSections = Array.isArray(payload.polylinesEncoded)
+        ? payload.polylinesEncoded
+        : [];
 
-      if (data.clearMarkers) clearMarkers();
-      if (data.clearPolylines) clearPolylines();
-
-      // Markers
-      if (Array.isArray(data.markers)) {
-        data.markers.forEach(m => {
-          const lat = Number(m.lat);
-          const lng = Number(m.lng);
-          if (!isFinite(lat) || !isFinite(lng)) return;
-          const icon = new H.map.Icon(markerSvgNumber(m.label, m.color || '#1A73E8'));
-          const marker = new H.map.Marker({ lat, lng }, { icon });
-          markersGroup.addObject(marker);
-        });
+      if (payload.clearMarkers === true || markers.length > 0) {
+        clearMarkers();
+      }
+      if (payload.clearPolylines === true ||
+          encodedSections.length > 0 ||
+          Array.isArray(pointPolyline)) {
+        clearPolylines();
       }
 
-      // Polyline
-      if (data.polyline) drawPolyline(data.polyline);
+      markers.forEach((item, index) => {
+        const lat = Number(item.lat);
+        const lng = Number(item.lng);
+        if (!isFinite(lat) || !isFinite(lng)) return;
+        const marker = createMarker(
+          lat,
+          lng,
+          item.label != null ? item.label : String(index + 1),
+          item.color || '#1A73E8'
+        );
+        markersGroup.addObject(marker);
+      });
 
-      // Center/Zoom
-      if (data.center && data.center.lat != null && data.center.lng != null) {
-        map.setCenter({ lat: Number(data.center.lat), lng: Number(data.center.lng) }, true);
+      let hasRoute = false;
+      if (encodedSections.length > 0) {
+        hasRoute = drawEncodedSections(encodedSections);
+      } else if (pointPolyline) {
+        hasRoute = drawPointsPolyline(pointPolyline);
       }
-      if (data.zoom != null) map.setZoom(Number(data.zoom), true);
+
+      if (payload.center &&
+          payload.center.lat != null &&
+          payload.center.lng != null &&
+          !hasRoute) {
+        map.setCenter({
+          lat: Number(payload.center.lat),
+          lng: Number(payload.center.lng)
+        }, true);
+      }
+
+      if (payload.zoom != null && !hasRoute) {
+        map.setZoom(Number(payload.zoom), true);
+      }
+
+      if (markers.length > 0 || hasRoute) {
+        fitBestBounds();
+      }
+
+      resizeHereMap();
+    }
+
+    window.setHereApiKey = function(key) {
+      window.HERE_API_KEY = (key || '').toString();
+      if (initMap() && pendingPayload) {
+        const payload = pendingPayload;
+        pendingPayload = null;
+        renderPayload(payload);
+      }
     };
 
-    // Boot: nếu page load đã có key sẵn
-    (function boot() {
-      const k = getApiKey();
-      if (k && k.length > 10) {
-        initMap(k);
-      } else {
-        // Không init ngay — chờ Flutter inject key
-        showBanner('Đang chờ HERE API key...');
+    window.resizeHereMap = resizeHereMap;
+
+    window.updateMap = function(payloadValue) {
+      let payload = payloadValue;
+      if (typeof payloadValue === 'string') {
+        try {
+          payload = JSON.parse(payloadValue);
+        } catch (_) {
+          return;
+        }
       }
-    })();
-</script>
+      renderPayload(payload);
+    };
+
+    if (getApiKey()) {
+      initMap();
+    } else {
+      showBanner('Dang cho HERE API key...', 'info');
+    }
+  </script>
 </body>
 </html>

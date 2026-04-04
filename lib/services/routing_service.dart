@@ -42,7 +42,7 @@ class RoutingService {
       await AnalyticsService.track('route_failed', {
         'error_type': 'missing_api_key',
       });
-      throw const MissingApiKeyException();
+      throw MissingApiKeyException();
     }
 
     final requestId = DateTime.now().microsecondsSinceEpoch.toString();

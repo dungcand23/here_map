@@ -23,7 +23,7 @@ class SearchService {
     if (q.isEmpty) return [];
 
     if (!AppConfig.hasHereApiKey) {
-      throw const MissingApiKeyException();
+      throw MissingApiKeyException();
     }
 
     final cacheKey =
@@ -94,14 +94,8 @@ class SearchService {
       final pos = m['position'] as Map;
 
       final title = (m['title'] ?? '').toString();
-      String subtitle = '';
       final addr = m['address'];
-      if (addr is Map && addr['label'] != null) {
-        subtitle = (addr['label'] ?? '').toString();
-      }
-
-      // Nếu label trùng title thì ẩn đi cho gọn.
-      if (subtitle.trim() == title.trim()) subtitle = '';
+      final subtitle = _buildSubtitle(title, addr);
 
       return StopModel(
         lat: (pos['lat'] as num).toDouble(),
@@ -116,6 +110,35 @@ class SearchService {
     return results;
   }
 
+  /// Geocode cũng dùng chung helper
+  static String _buildSubtitle(String title, dynamic addr) {
+    if (addr is! Map) return '';
+
+    // Ưu tiên ghép: street, district, city, state, country
+    final parts = <String>[];
+    void add(String? v) {
+      final s = (v ?? '').toString().trim();
+      if (s.isNotEmpty) parts.add(s);
+    }
+
+    add(addr['street'] as String?);
+    add(addr['district'] as String?);
+    add(addr['city'] as String?);
+    add(addr['state'] as String?);
+    add(addr['countryName'] as String?);
+
+    final structured = parts.join(', ');
+    if (structured.isNotEmpty && structured.trim() != title.trim()) {
+      return structured;
+    }
+
+    // Fallback về label nếu không có trường riêng
+    final label = (addr['label'] ?? '').toString().trim();
+    if (label.isNotEmpty && label != title.trim()) return label;
+
+    return '';
+  }
+
   /// HERE Geocode (fallback): dùng khi người dùng nhập xa/không chọn từ autosuggest.
   /// Endpoint: geocode.search.hereapi.com/v1/geocode
   static Future<List<StopModel>> geocode({
@@ -126,7 +149,7 @@ class SearchService {
     if (q.isEmpty) return [];
 
     if (!AppConfig.hasHereApiKey) {
-      throw const MissingApiKeyException();
+      throw MissingApiKeyException();
     }
 
     final cacheKey = 'geocode|${q.toLowerCase()}|$limit';
@@ -179,12 +202,8 @@ class SearchService {
       final pos = m['position'] as Map;
 
       final title = (m['title'] ?? '').toString();
-      String subtitle = '';
       final addr = m['address'];
-      if (addr is Map && addr['label'] != null) {
-        subtitle = (addr['label'] ?? '').toString();
-      }
-      if (subtitle.trim() == title.trim()) subtitle = '';
+      final subtitle = _buildSubtitle(title, addr);
 
       return StopModel(
         lat: (pos['lat'] as num).toDouble(),

@@ -13,6 +13,8 @@ import '../../services/waypoints_sequence_service.dart';
 import '../../services/api_exceptions.dart';
 import '../map/map_view.dart';
 import '../widgets/bottom_sheet_panel.dart';
+import '../widgets/config_health_banner.dart';
+import '../widgets/config_diagnostics_sheet.dart';
 import 'analytics_dashboard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -45,8 +47,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openSettings() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Mở Cài đặt (placeholder)')),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      builder: (_) => const ConfigDiagnosticsSheet(),
     );
   }
 
@@ -293,75 +299,84 @@ class _HomeScreenState extends State<HomeScreen> {
       return Scaffold(
         backgroundColor: const Color(0xFFF3F5F8),
         body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, c) {
-              final leftWidth = (c.maxWidth * 0.34).clamp(360.0, 420.0);
+          child: Column(
+            children: [
+              const ConfigHealthBanner(
+                margin: EdgeInsets.fromLTRB(12, 12, 12, 0),
+              ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final leftWidth = (c.maxWidth * 0.34).clamp(360.0, 420.0);
 
-              return Row(
-                children: [
-                  SizedBox(
-                    width: leftWidth,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Material(
-                        color: const Color(0xFFF3F5F8),
-                        child: BottomSheetPanel(
-                          scrollController: ScrollController(),
-                          app: app,
-                          isRouting: _isRouting,
-                          distanceKm: _distanceKm,
-                          durationMin: _durationMin,
-                          onRequestRoute: () => _buildRoute(app),
-                          onClearRoute: _clearRouteOnly,
-                          onResetPlan: () => _resetPlan(app),
-                          onLoadSavedRoute: (r) => app.loadSavedRoute(r),
-                          onOpenSettings: _openSettings,
-                          onOpenTeamWorkspace: _openTeamWorkspace,
-                          onOpenAnalytics: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen()),
-                            );
-                          },
-                          authLabel: b2b.authLabel(),
-                          canSaveTeamRoute: canSaveTeamRoute,
-                          onSaveTeamRoute: (routeName) async {
-                            final s = app.state;
-                            final ok = await b2b.saveCurrentRouteToTeam(
-                              name: routeName,
-                              distanceKm: _distanceKm,
-                              durationMin: _durationMin,
-                              stops: List.of(s.stops.where((e) => e.name.trim().isNotEmpty)),
-                              vehicle: s.currentVehicle,
-                              truck: s.truckOption,
-                              trafficEnabled: s.trafficEnabled,
-                              mapMode: s.mapMode,
-                            );
-                            if (ok == null && mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Không thể lưu team (chưa login/team hoặc thiếu quyền)')),
-                              );
-                            } else if (ok != null && mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Đã lưu tuyến vào team')),
-                              );
-                            }
-                          },
+                    return Row(
+                      children: [
+                        SizedBox(
+                          width: leftWidth,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: Material(
+                              color: const Color(0xFFF3F5F8),
+                              child: BottomSheetPanel(
+                                scrollController: ScrollController(),
+                                app: app,
+                                isRouting: _isRouting,
+                                distanceKm: _distanceKm,
+                                durationMin: _durationMin,
+                                onRequestRoute: () => _buildRoute(app),
+                                onClearRoute: _clearRouteOnly,
+                                onResetPlan: () => _resetPlan(app),
+                                onLoadSavedRoute: (r) => app.loadSavedRoute(r),
+                                onOpenSettings: _openSettings,
+                                onOpenTeamWorkspace: _openTeamWorkspace,
+                                onOpenAnalytics: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const AnalyticsDashboardScreen()),
+                                  );
+                                },
+                                authLabel: b2b.authLabel(),
+                                canSaveTeamRoute: canSaveTeamRoute,
+                                onSaveTeamRoute: (routeName) async {
+                                  final s = app.state;
+                                  final ok = await b2b.saveCurrentRouteToTeam(
+                                    name: routeName,
+                                    distanceKm: _distanceKm,
+                                    durationMin: _durationMin,
+                                    stops: List.of(s.stops.where((e) => e.name.trim().isNotEmpty)),
+                                    vehicle: s.currentVehicle,
+                                    truck: s.truckOption,
+                                    trafficEnabled: s.trafficEnabled,
+                                    mapMode: s.mapMode,
+                                  );
+                                  if (ok == null && mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Không thể lưu team (chưa login/team hoặc thiếu quyền)')),
+                                    );
+                                  } else if (ok != null && mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Đã lưu tuyến vào team')),
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(14),
-                        bottomLeft: Radius.circular(14),
-                      ),
-                      child: MapView(payload: _mapPayload),
-                    ),
-                  ),
-                ],
-              );
-            },
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(14),
+                              bottomLeft: Radius.circular(14),
+                            ),
+                            child: MapView(payload: _mapPayload),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -371,6 +386,17 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           Positioned.fill(child: MapView(payload: _mapPayload)),
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: ConfigHealthBanner(
+                margin: EdgeInsets.fromLTRB(12, 12, 12, 0),
+              ),
+            ),
+          ),
           DraggableScrollableSheet(
             initialChildSize: 0.30,
             minChildSize: 0.18,

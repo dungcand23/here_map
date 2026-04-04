@@ -1,91 +1,83 @@
-# HERE Map Route Planner (Phase 2.5 - Backend-ready B2B-lite)
+## Cấu trúc lib rút gọn
 
-Flutter app demo: **HERE Autosuggest + Multi-stop Routing** (Web / Mobile WebView).
+Bản này đã ghép `lib/` xuống còn 5 file chính để dễ mở nhanh trong Android Studio / VS Code:
 
-## What's included (Phase 0 + Phase 1 + Phase 1.1 + Phase 2 + Phase 2.5)
+- `lib/main.dart`
+- `lib/app_core.dart`
+- `lib/app_config.dart`
+- `lib/map_view_web.dart`
+- `lib/map_view_io.dart`
 
-### Phase 0 (Foundation)
-- ✅ **No hardcoded HERE API key** in repo (Web + Mobile WebView).
-- ✅ Inject key at runtime via `--dart-define=HERE_API_KEY=...`.
-- ✅ Real GPS location (Geolocator) with fallback.
-- ✅ Better error handling (no app crash on HTTP/API errors).
+`app_core.dart` giữ toàn bộ core logic, còn 2 file map tách riêng theo nền tảng để tránh lỗi build.
 
-### Phase 1 (Measurement)
-- ✅ Local analytics (event schema) persisted via SharedPreferences.
-- ✅ In-app **Analytics Dashboard** (KPIs + recent events + export JSONL).
+---
 
-### Phase 1.1 (Dev ergonomics)
-- ✅ `env.example.json` + `--dart-define-from-file` hỗ trợ chạy dev nhanh.
-- ✅ Script `run_dev.sh` (mobile) / `run_web.sh` (web).
-- ✅ VS Code launch config `.vscode/launch.json`.
+# HERE Map Route Planner
 
-### Phase 2 (B2B-lite - Team & Share)
-- ✅ **Local sign-in** (email + display name) để mô phỏng auth (không phụ thuộc Firebase).
-- ✅ **Team workspace**: tạo/join team bằng join code.
-- ✅ **RBAC**: owner/dispatcher/driver (owner mới đổi role).
-- ✅ **Team routes (local backend)**: lưu tuyến vào team, list/xóa.
-- ✅ **Share tuyến**: xuất **share link + QR** (web) + share code backup.
-- ✅ **Import share code/link**: nhập tuyến vào app và tự lưu local.
+Flutter app demo cho HERE Autosuggest + auto route + multi-stop routing.
+Ban patch nay uu tien chay duoc tren **Windows desktop** truoc, sau do moi den web/mobile.
 
-### Phase 2.5 (Backend-ready refactor)
-- ✅ Tách **contract layer**: `AuthRepository`, `TeamRepository`, `RouteRepository`, `ShareRepository`, `SessionStore`.
-- ✅ Bọc DI thành `B2BContainer` để UI/State không phụ thuộc implementation.
-- ✅ `B2B_BACKEND_MODE`:
-  - `local` (default): chạy demo offline như Phase 2.
-  - `wms`: dùng stub repository (HTTP) — sẵn khung để cắm API WMS thật ở Phase 3/4.
-- ✅ Share/import không còn gọi thẳng `ShareUtils.decode/encode` ở UI mà đi qua `ShareRepository`.
+## Diem da duoc sua trong ban nay
 
-## Run
+- Da bat **Windows map inline** bang WebView2, khong con placeholder.
+- Van su dung **HERE Maps JS** de render map trong desktop app.
+- Autosuggest da co **fallback sang geocode** de giam loi khi go dia chi.
+- Route builder uu tien:
+  1. autosuggest / geocode
+  2. optimize stop order
+  3. routing v8
+  4. ve polyline encoded len map
+- Da giu san `HERE_API_KEY` trong:
+  - `lib/app_env_defaults.dart`
+  - `env.dev.json`
 
-### 0) Quickstart (recommended)
-1) Copy env
+## Chay nhanh
 
-```bash
-cp env.example.json env.dev.json
+### Windows desktop
+```bat
+flutter pub get
+flutter run -d windows
 ```
 
-2) Fill `HERE_API_KEY` in `env.dev.json`.
-   - Optional: set `B2B_BACKEND_MODE` = `local` (default) hoặc `wms`.
-   - Nếu `wms`: set `WMS_BASE_URL`.
-
-3) Run
-
-```bash
-./run_dev.sh
-# or
-./run_web.sh
+Hoac:
+```bat
+run_windows.bat
 ```
 
-### 1) Set HERE API key (manual)
-Pass it at runtime:
-
-```bash
-flutter run --dart-define=HERE_API_KEY=YOUR_KEY
+### Build file .exe
+```bat
+build_windows_release.bat
 ```
 
-Web:
-
-```bash
-flutter run -d chrome --dart-define=HERE_API_KEY=YOUR_KEY
+File build release se nam o:
+```text
+build\windows\x64\runner\Release\here_map.exe
 ```
 
-> Tip: Use different keys per environment and restrict them by domain/bundleId.
+### Web
+```bash
+flutter run -d chrome --dart-define-from-file=env.dev.json
+```
 
-### 2) Open Analytics Dashboard
-In the bottom panel footer, tap the **Insights** icon (📈) to open the dashboard.
+## Neu Windows khong hien map
 
-Dashboard shows:
-- Route requests / success rate
-- Route latency p50 / p95
-- Search → select rate
-- Recent events
-- Export last 500 events as JSONL
+Kiem tra theo thu tu nay:
 
-## Notes
-- This project uses HERE JS (map render) + HERE REST APIs (autosuggest / routing / browse).
-- Windows map view is not implemented yet (placeholder).
+1. `flutter pub get`
+2. `flutter run -d windows`
+3. May co **Microsoft Edge WebView2 Runtime**
+4. Co internet de HERE JS tai tile/script
+5. HERE key con hieu luc
 
-## B2B-lite usage
-- Tap **Team** ở footer để đăng nhập (local) và tạo/join team.
-- Khi đã có route, nút **Lưu team** sẽ hiện nếu bạn là owner/dispatcher.
-- Nút **Share** sẽ tạo QR + link dạng `/?code=...` (web) và share code backup.
+## Cau hinh
+
+Ban nay da kem san:
+- `env.dev.json`
+- fallback key trong `lib/app_env_defaults.dart`
+
+Nghia la ban co the chay ngay ma khong can sua key nua.
+
+## Ghi chu
+
+- Web van co the gap loi do browser/restriction, nhung Windows desktop se on dinh hon cho luong autosuggest/routing.
+- Neu sau nay ban day source len repo public, nen xoa key khoi source va rotate key.
