@@ -221,7 +221,7 @@
       return new H.map.Marker({ lat: lat, lng: lng }, { icon: icon });
     }
 
-    function drawPointsPolyline(points) {
+    function drawPointsPolyline(points, color) {
       if (!Array.isArray(points)) return false;
       try {
         const ls = new H.geo.LineString();
@@ -234,7 +234,7 @@
         });
         if (ls.getPointCount() < 2) return false;
         const polyline = new H.map.Polyline(ls, {
-          style: { lineWidth: 6, strokeColor: '#1A73E8' }
+          style: { lineWidth: 6, strokeColor: color || '#4285F4' }
         });
         polylinesGroup.addObject(polyline);
         return true;
@@ -252,7 +252,7 @@
           const ls = H.geo.LineString.fromFlexiblePolyline(value);
           if (!ls || ls.getPointCount() < 2) return;
           const polyline = new H.map.Polyline(ls, {
-            style: { lineWidth: 6, strokeColor: '#1A73E8' }
+            style: { lineWidth: 6, strokeColor: polylineColor || '#4285F4' }
           });
           polylinesGroup.addObject(polyline);
           drawn = true;
@@ -296,6 +296,7 @@
       const encodedSections = Array.isArray(payload.polylinesEncoded)
         ? payload.polylinesEncoded
         : [];
+      const polylineColor = payload.polylineColor || '#4285F4';
 
       if (payload.clearMarkers === true || markers.length > 0) {
         clearMarkers();
@@ -323,7 +324,7 @@
       if (encodedSections.length > 0) {
         hasRoute = drawEncodedSections(encodedSections);
       } else if (pointPolyline) {
-        hasRoute = drawPointsPolyline(pointPolyline);
+        hasRoute = drawPointsPolyline(pointPolyline, polylineColor);
       }
 
       if (payload.center &&

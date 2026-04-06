@@ -23,6 +23,8 @@ class AppConfig {
       String.fromEnvironment('B2B_BACKEND_MODE', defaultValue: '');
   static const String _envWmsBaseUrl =
       String.fromEnvironment('WMS_BASE_URL', defaultValue: '');
+  static const String _envGoogleWebClientId =
+      String.fromEnvironment('GOOGLE_WEB_CLIENT_ID', defaultValue: '');
 
   static String _pick(String envValue, String fallbackValue) {
     final env = envValue.trim();
@@ -35,6 +37,7 @@ class AppConfig {
   static String get b2bBackendMode =>
       _pick(_envB2BBackendMode, AppEnvDefaults.b2bBackendMode).toLowerCase();
   static String get wmsBaseUrl => _pick(_envWmsBaseUrl, AppEnvDefaults.wmsBaseUrl);
+  static String get googleWebClientId => _envGoogleWebClientId.trim();
 
   static bool get hasHereApiKey => hereApiKey.isNotEmpty;
 

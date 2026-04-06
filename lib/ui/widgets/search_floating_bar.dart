@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../state/app_notifier.dart';
 import '../../services/search_service.dart';
 import '../../models/stop_model.dart';
 import '../../app_config.dart';
